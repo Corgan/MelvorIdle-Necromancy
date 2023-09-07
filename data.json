@@ -1,0 +1,311 @@
+{
+  "$schema": "https://melvoridle.com/assets/schema/gameData.json",
+  "namespace": "necromancy",
+  "data": {
+    "attackStyles": [
+      {
+        "id": "Necromancy",
+        "name": "Necromancy",
+        "modifiers": {
+          "increasedHiddenSkillLevel": [
+            {
+              "skillID": "necromancy:Necromancy",
+              "value": 6
+            }
+          ]
+        },
+        "experienceGain": [
+          {
+            "skillID": "necromancy:Necromancy",
+            "ratio": 4
+          }
+        ],
+        "attackType": "necro"
+      }
+    ],
+    "items": [
+      {
+        "id": "Death_Guard_T1",
+        "name": "Death Guard",
+        "category": "Combat",
+        "type": "Weapon",
+        "media": "assets/death_guard.png",
+        "ignoreCompletion": false,
+        "obtainFromItemLog": false,
+        "golbinRaidExclusive": false,
+        "sellsFor": 1,
+        "tier": "Misc",
+        "validSlots": [
+          "Weapon"
+        ],
+        "occupiesSlots": [],
+        "equipRequirements": [
+          {
+            "type": "SkillLevel",
+            "skillID": "necromancy:Necromancy",
+            "level": 1
+          }
+        ],
+        "equipmentStats": [
+          {
+            "key": "attackSpeed",
+            "value": 1800
+          },
+          {
+            "key": "necroAttackBonus",
+            "value": 9
+          },
+          {
+            "key": "necroStrengthBonus",
+            "value": 5
+          }
+        ],
+        "specialAttacks": [
+          "necromancy:Necromancy"
+        ],
+        "itemType": "Weapon",
+        "attackType": "necro"
+      },
+      {
+        "id": "Skull_Lantern_T1",
+        "name": "Skull Lantern",
+        "category": "Combat",
+        "type": "Lantern",
+        "media": "assets/skull_lantern.png",
+        "ignoreCompletion": false,
+        "obtainFromItemLog": false,
+        "golbinRaidExclusive": false,
+        "sellsFor": 1,
+        "tier": "Misc",
+        "validSlots": [
+          "Shield"
+        ],
+        "occupiesSlots": [],
+        "equipRequirements": [
+          {
+            "type": "SkillLevel",
+            "skillID": "necromancy:Necromancy",
+            "level": 1
+          }
+        ],
+        "equipmentStats": [
+          {
+            "key": "necroAttackBonus",
+            "value": 9
+          },
+          {
+            "key": "necroStrengthBonus",
+            "value": 5
+          }
+        ],
+        "itemType": "Equipment"
+      },
+      {
+        "id": "Death_Warden_Hood_T1",
+        "name": "Death Warden Hood",
+        "category": "Combat",
+        "type": "Armour",
+        "media": "assets/death_warden_hood.png",
+        "ignoreCompletion": false,
+        "obtainFromItemLog": false,
+        "golbinRaidExclusive": false,
+        "sellsFor": 1,
+        "tier": "Misc",
+        "validSlots": [
+          "Helmet"
+        ],
+        "occupiesSlots": [],
+        "equipRequirements": [
+          {
+            "type": "SkillLevel",
+            "skillID": "necromancy:Necromancy",
+            "level": 1
+          }
+        ],
+        "equipmentStats": [
+          {
+            "key": "necroDefenceBonus",
+            "value": 4
+          }
+        ],
+        "itemType": "Equipment"
+      },
+      {
+        "id": "Death_Warden_Robes_T1",
+        "name": "Death Warden Robes",
+        "category": "Combat",
+        "type": "Armour",
+        "media": "assets/death_warden_robes.png",
+        "ignoreCompletion": false,
+        "obtainFromItemLog": false,
+        "golbinRaidExclusive": false,
+        "sellsFor": 1,
+        "tier": "Misc",
+        "validSlots": [
+          "Platebody"
+        ],
+        "occupiesSlots": [],
+        "equipRequirements": [
+          {
+            "type": "SkillLevel",
+            "skillID": "necromancy:Necromancy",
+            "level": 1
+          }
+        ],
+        "equipmentStats": [
+          {
+            "key": "necroDefenceBonus",
+            "value": 15
+          }
+        ],
+        "itemType": "Equipment"
+      },
+      {
+        "id": "Death_Warden_Pants_T1",
+        "name": "Death Warden Pants",
+        "category": "Combat",
+        "type": "Armour",
+        "media": "assets/death_warden_pants.png",
+        "ignoreCompletion": false,
+        "obtainFromItemLog": false,
+        "golbinRaidExclusive": false,
+        "sellsFor": 1,
+        "tier": "Misc",
+        "validSlots": [
+          "Platelegs"
+        ],
+        "occupiesSlots": [],
+        "equipRequirements": [
+          {
+            "type": "SkillLevel",
+            "skillID": "necromancy:Necromancy",
+            "level": 1
+          }
+        ],
+        "equipmentStats": [
+          {
+            "key": "necroDefenceBonus",
+            "value": 8
+          }
+        ],
+        "itemType": "Equipment"
+      },
+      {
+        "id": "Death_Warden_Gloves_T1",
+        "name": "Death Warden Gloves",
+        "category": "Combat",
+        "type": "Armour",
+        "media": "assets/death_warden_gloves.png",
+        "ignoreCompletion": false,
+        "obtainFromItemLog": false,
+        "golbinRaidExclusive": false,
+        "sellsFor": 1,
+        "tier": "Misc",
+        "validSlots": [
+          "Gloves"
+        ],
+        "occupiesSlots": [],
+        "equipRequirements": [
+          {
+            "type": "SkillLevel",
+            "skillID": "necromancy:Necromancy",
+            "level": 1
+          }
+        ],
+        "equipmentStats": [
+          {
+            "key": "necroAttackBonus",
+            "value": 2
+          },
+          {
+            "key": "necroStrengthBonus",
+            "value": 2
+          },
+          {
+            "key": "necroDefenceBonus",
+            "value": 2
+          }
+        ],
+        "itemType": "Equipment"
+      },
+      {
+        "id": "Death_Warden_Boots_T1",
+        "name": "Death Warden Boots",
+        "category": "Combat",
+        "type": "Armour",
+        "media": "assets/death_warden_boots.png",
+        "ignoreCompletion": false,
+        "obtainFromItemLog": false,
+        "golbinRaidExclusive": false,
+        "sellsFor": 1,
+        "tier": "Misc",
+        "validSlots": [
+          "Boots"
+        ],
+        "occupiesSlots": [],
+        "equipRequirements": [
+          {
+            "type": "SkillLevel",
+            "skillID": "necromancy:Necromancy",
+            "level": 1
+          }
+        ],
+        "equipmentStats": [
+          {
+            "key": "necroDefenceBonus",
+            "value": 1
+          }
+        ],
+        "itemType": "Equipment"
+      }
+    ],
+    "attacks": [
+      {
+        "id": "Necromancy",
+        "defaultChance": 100,
+        "damage": [
+          {
+            "damageType": "Custom",
+            "character": "Attacker",
+            "maxRoll": "MaxHitModAccuracy",
+            "maxPercent": 100,
+            "minRoll": "MinHitModAccuracy",
+            "minPercent": 100,
+            "roll": true
+          }
+        ],
+        "prehitEffects": [],
+        "onhitEffects": [],
+        "cantMiss": true,
+        "minAccuracy": 0.25,
+        "attackCount": 1,
+        "attackInterval": -1,
+        "lifesteal": 0,
+        "name": "Necromancy",
+        "description": "Attacks target for ${attackDamageMaxValue0}% of your normal damage. Damage is modified by chance to hit. Always hits above 25% chance to hit. Always misses below 25% chance to hit.",
+        "descriptionGenerator": "Attack the <target> dealing <damage>."
+      }
+    ],
+    "skillData": [
+      {
+        "skillID": "necromancy:Necromancy",
+        "data": {}
+      }
+    ]
+  },
+  "modifications": {
+    "monsters": [
+      {
+        "id": "melvorD:DarkWizard",
+        "equipmentStats": {
+          "add": [
+            { "key": "necroDefenceBonus", "value": 30 }
+          ]
+        },
+        "levels": {
+          "Necromancy": 40
+        }
+      }
+    ]
+  }
+}

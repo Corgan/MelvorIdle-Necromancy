@@ -1,0 +1,4 @@
+{
+  "namespace": "necromancy",
+  "setup": "setup.mjs"
+}
