@@ -1,39 +1,24 @@
-export async function setup({ characterStorage, gameData, patch, loadTemplates, loadModule, onInterfaceAvailable, onCharacterLoaded }) {
-    for(let id in combatTriangle) {
-        combatTriangle[id].damageModifier.melee.necro = 1;
-        combatTriangle[id].damageModifier.ranged.necro = 1;
-        combatTriangle[id].damageModifier.magic.necro = 1;
-        combatTriangle[id].damageModifier.necro = { melee: 1, ranged: 1, magic: 1, necro: 1 };
+export async function setup({ name, characterStorage, gameData, patch, loadTemplates, loadModule, onModsLoaded, onCharacterSelectionLoaded, onInterfaceAvailable, onCharacterLoaded, onInterfaceReady }) {
+    patch(CombatManager, 'combatTriangle').get(function(o) {
+        let triangle = o();
+        
+        triangle.damageModifier.melee.necro = 1;
+        triangle.damageModifier.ranged.necro = 1;
+        triangle.damageModifier.magic.necro = 1;
+        triangle.damageModifier.necro = { melee: 1, ranged: 1, magic: 1, necro: 1 };
 
-        combatTriangle[id].reductionModifier.melee.necro = 1;
-        combatTriangle[id].reductionModifier.ranged.necro = 1;
-        combatTriangle[id].reductionModifier.magic.necro = 1;
-        combatTriangle[id].reductionModifier.necro = { melee: 1, ranged: 1, magic: 1, necro: 1 };
-    };
+        triangle.reductionModifier.melee.necro = 1;
+        triangle.reductionModifier.ranged.necro = 1;
+        triangle.reductionModifier.magic.necro = 1;
+        triangle.reductionModifier.necro = { melee: 1, ranged: 1, magic: 1, necro: 1 };
+
+        return triangle;
+    });
     
     equipStatKeys.push('necroAttackBonus', 'necroStrengthBonus', 'necroDefenceBonus');
     loadedLangJson['EQUIPMENT_STAT_necroAttackBonus'] = '${statValue} Necromancy Attack Bonus';
     loadedLangJson['EQUIPMENT_STAT_necroStrengthBonus'] = '${statValue} Necromancy Strength Bonus';
     loadedLangJson['EQUIPMENT_STAT_necroDefenceBonus'] = '${statValue} Necromancy Defence Bonus';
-
-    modifierData['increasedFlatNecromancyAttackBonus'] = {
-        get langDescription() {
-            return getLangString('MODIFIER_DATA_increasedFlatNecromancyAttackBonus');
-        },
-        description: '+${value} Necromancy Attack Bonus',
-        isSkill: false,
-        isNegative: false,
-        tags: ['combat'],
-    }
-    modifierData['increasedNecromancyStrengthBonus'] = {
-        get langDescription() {
-            return getLangString('MODIFIER_DATA_increasedNecromancyStrengthBonus');
-        },
-        description: '+${value}% Necromancy Strength Bonus from Equipment',
-        isSkill: false,
-        isNegative: false,
-        tags: ['combat'],
-    }
 
     console.log("Loading Necromancy Templates");
     await loadTemplates("templates.html"); // Add templates
@@ -43,8 +28,9 @@ export async function setup({ characterStorage, gameData, patch, loadTemplates, 
 
     game.necromancy = game.registerSkill(game.registeredNamespaces.getNamespace('necromancy'), Necromancy); // Register skill
 
-    game.pages.getObjectByID('melvorD:Combat').skills.push(game.necromancy);
-
+    let skills = game.pages.getObjectByID('melvorD:Combat').skills;
+    skills.splice(skills.indexOf(game.altMagic)+1, 0, game.necromancy);
+    
     rollData['MaxHitModAccuracy'] = {
         formatPercent: (value)=>`\${${value}}%`,
         formatName: (name)=>` of ${name} max hit`,
@@ -56,7 +42,7 @@ export async function setup({ characterStorage, gameData, patch, loadTemplates, 
     }
 
     const _getDamageRoll = getDamageRoll;
-    getDamageRoll = function(character, type, percent, damageDealt=0) {
+    getDamageRoll = function(character, type, percent, damageDealt=0, damageTaken=0) {
         let value = 0;
         if(type === 'MaxHitModAccuracy' || type === 'MinHitModAccuracy') {
             let damageMod = 1;
@@ -104,7 +90,18 @@ export async function setup({ characterStorage, gameData, patch, loadTemplates, 
         this.necroDefenceBonus = 0;
     });
 
-    patch(CombatModifiers, 'getProtectionValue').replace(function(o, type) {
+    patch(CharacterModifierTable, 'getCritChance').replace(function(o, type) {
+        if(type === 'necro') {
+            let totalBonus = this.critChance;
+            //totalBonus += this.increasedNecroMaxHit;
+            //totalBonus -= this.decreasedNecroMaxHit;
+            return totalBonus;
+        } else {
+            return o(type);
+        }
+    });
+
+    patch(CharacterModifierTable, 'getProtectionValue').replace(function(o, type) {
         if(type === 'necro') {
             return 0;
         } else {
@@ -112,81 +109,13 @@ export async function setup({ characterStorage, gameData, patch, loadTemplates, 
         }
     });
 
-    patch(CombatModifiers, 'getCritChance').replace(function(o, type) {
+    patch(CharacterModifierTable, 'getImmunity').replace(function(o, type) {
         if(type === 'necro') {
-            let totalBonus = 0;
-            //totalBonus += this.increasedNecroMaxHit;
-            //totalBonus -= this.decreasedNecroMaxHit;
-            return totalBonus;
+            return false;
         } else {
             return o(type);
         }
     });
-
-    patch(CombatModifiers, 'getMaxHitModifier').replace(function(o, type) {
-        if(type === 'necro') {
-            let totalBonus = this.increasedMaxHitPercent - this.decreasedMaxHitPercent;
-            //totalBonus += this.increasedNecroMaxHit;
-            //totalBonus -= this.decreasedNecroMaxHit;
-            return totalBonus;
-        } else {
-            return o(type);
-        }
-    });
-
-    patch(CombatModifiers, 'getMaxHitFlatModifier').replace(function(o, type) {
-        if(type === 'necro') {
-            let totalBonus = this.increasedMaxHitFlat - this.decreasedMaxHitFlat;
-            //totalBonus += this.increasedNecroMaxHitFlat;
-            //totalBonus -= this.decreasedNecroMaxHitFlat;
-            return totalBonus;
-        } else {
-            return o(type);
-        }
-    });
-
-    patch(CombatModifiers, 'getAccuracyModifier').replace(function(o, type) {
-        if(type === 'necro') {
-            let totalBonus = this.increasedGlobalAccuracy - this.decreasedGlobalAccuracy;
-            //totalBonus += this.increasedNecromancyAccuracyBonus;
-            //totalBonus -= this.decreasedNecromancyAccuracyBonus;
-            return totalBonus;
-        } else {
-            return o(type);
-        }
-    });
-
-    patch(CombatModifiers, 'getEvasionModifier').replace(function(o, type) {
-        if(type === 'necro') {
-            let totalBonus = this.increasedGlobalEvasion - this.decreasedGlobalEvasion;
-            //totalBonus += this.increasedNecromancyEvasion;
-            //totalBonus -= this.decreasedNecromancyEvasion;
-            return totalBonus;
-        } else {
-            return o(type);
-        }
-    });
-
-    patch(CombatModifiers, 'getLifesteal').replace(function(o, type) {
-        if(type === 'necro') {
-            let totalBonus = this.increasedLifesteal - this.decreasedLifesteal;
-            if (this.increasedLifestealBasedOnHPRegenEffectiveness > 0) {
-                totalBonus += (this.increasedLifestealBasedOnHPRegenEffectiveness / 100) * (this.increasedHitpointRegeneration - this.decreasedHitpointRegeneration);
-            }
-            //totalBonus += this.increasedNecromancyEvasion;
-            //totalBonus -= this.decreasedNecromancyEvasion;
-            return totalBonus;
-        } else {
-            return o(type);
-        }
-    });
-
-    //patch(Character, 'computeHitchance').after(function() {
-    //    if(this.attackType === 'necro') {
-    //        const protection = this.target.modifiers.getProtectionValue(this.attackType);
-    //        this.hitchance = protection !== 0 ? 100 - protection : 100;
-    //    }
-    //});
 
     Character.prototype.computeNecroMaxHit = function() {
         let necroBonus = this.equipmentStats.necroStrengthBonus// + this.modifiers.increasedFlatNecroStrengthBonus;
@@ -197,8 +126,8 @@ export async function setup({ characterStorage, gameData, patch, loadTemplates, 
     }
 
     patch(Character, 'rollToHit').replace(function(o, target, attack) {
-        if(attack.cantMiss && attack.minAccuracy > 0 && attack.minAccuracy <= 1) {
-            return this.hitchance >= (attack.minAccuracy * 100);
+        if(this.attackType === 'necro' && attack.cantMiss && attack.minAccuracy > 0 && attack.minAccuracy <= 1) {
+            return this.stats.accuracy >= (attack.minAccuracy * 100);
         } else {
             return o(target, attack);
         }
@@ -229,7 +158,7 @@ export async function setup({ characterStorage, gameData, patch, loadTemplates, 
     }
 
     patch(Character, 'modifyEvasion').after(function(ret, evasion) {
-        let evasionNecroModifier = this.modifiers.getEvasionModifier('necro');
+        let evasionNecroModifier = 0;//this.modifiers.getValue('necromancy:necroEvasion');
         if (this.modifiers.decreasedEvasionBasedOnDR > 0) {
             const baseDR = this.equipmentStats.damageReduction;
             evasionNecroModifier -= Math.floor((baseDR / 2) * this.modifiers.decreasedEvasionBasedOnDR);
@@ -260,26 +189,36 @@ export async function setup({ characterStorage, gameData, patch, loadTemplates, 
     });
 
     patch(Character, 'renderStats').after(function() {
-        if(this.statElements.evasion.necro !== undefined)
-            this.statElements.evasion.necro.forEach((elem)=>(elem.textContent = formatNumber(this.stats.evasion.necro)));
+        //if(this.statElements.evasion.necro !== undefined)
+            //this.statElements.evasion.necro.forEach((elem)=>(elem.textContent = formatNumber(this.stats.evasion.necro)));
     });
 
     patch(Enemy, 'renderNoStats').after(function() {
-        if(this.statElements.evasion.necro !== undefined) {
-            this.statElements.evasion.necro.forEach((elem)=>(elem.textContent = '-'));
-        }
+        //if(this.statElements.evasion.necro !== undefined)
+            //this.statElements.evasion.necro.forEach((elem)=>(elem.textContent = '-'));
     });
 
     patch(Enemy, 'computeLevels').after(function() {
         this.levels.Necromancy = this.monster !== undefined && this.monster.levels.Necromancy !== undefined ? this.monster.levels.Necromancy : 1;
     });
 
+    patch(Game, 'playerNormalCombatLevel').get(function(o) {
+        const base = 0.25 * (this.defence.level + this.hitpoints.level + Math.floor(this.prayer.level / 2));
+        const necromancy = 0.325 * Math.floor((3 * this.necromancy.level) / 2);
+        return Math.max(o(), Math.floor(base + necromancy));
+    });
+
+    patch(Monster, 'combatLevel').get(function(o) {
+        const prayer = 1;
+        const base = 0.25 * (this.levels.Defence + this.levels.Hitpoints + Math.floor(prayer / 2));
+        const necromancy = 0.325 * Math.floor((3 * this.levels.Necromancy) / 2);
+        return Math.max(o(), Math.floor(base + necromancy));
+    });
+
     patch(Player, 'attackStyle').get(function(o) {
-        if(this.attackType === 'necro') {
-            return this.game.attackStyles.find((style)=>style.attackType === 'necro');
-        } else {
-            return o();
-        }
+        if(this.attackType === 'necro' && this.attackStyles.necro === undefined)
+            this.attackStyles.necro = this.game.attackStyles.find((style)=>style.attackType === 'necro');
+        return o();
     });
 
     patch(Player, 'renderAttackStyle').after(function() {
@@ -328,10 +267,13 @@ export async function setup({ characterStorage, gameData, patch, loadTemplates, 
     });
 
     patch(Game, 'onLoad').before(function() {
-        enemyHTMLElements.levels.Necromancy = [document.getElementById('combat-enemy-necromancy-level')];
-        enemyHTMLElements.evasion.necro = [document.getElementById('combat-enemy-necro-evasion')];
+        //if(!COMBAT_LEVEL_KEYS.includes('Necromancy'))
+        //    COMBAT_LEVEL_KEYS.push('Necromancy');
+        //enemyHTMLElements.levels.Necromancy = [document.getElementById('combat-enemy-necromancy-level')];
+        //enemyHTMLElements.levelContainers.Necromancy = [];
+        //enemyHTMLElements.evasion.necro = [document.getElementById('combat-enemy-necro-evasion')];
         
-        playerHTMLElements.evasion.necro = [document.getElementById('combat-player-defence-bonus-necro')];
+        //playerHTMLElements.evasion.necro = [document.getElementById('combat-player-defence-bonus-necro')];
     });
 
 
@@ -340,7 +282,132 @@ export async function setup({ characterStorage, gameData, patch, loadTemplates, 
 
     console.log('Registered Necromancy Data.');
 
-    onInterfaceAvailable(() => {
+    patch(EvasionTableElement, 'setStats').after(function(_, character) {
+        if(this.necroEvasion)
+            this.necroEvasion.textContent = formatNumber(character.stats.evasion.necro);
+    });
+
+    patch(EvasionTableElement, 'setEmpty').after(function() {
+        if(this.necroEvasion)
+            this.necroEvasion.textContent = '-';
+    });
+
+    patch(CombatLevelsElement, 'setLevels').after(function(_, character) {
+        if(this.necroLevel)
+            this.necroLevel.textContent = formatNumber(character.levels.Necromancy);
+    });
+
+    patch(CombatLevelsElement, 'setEmpty').after(function() {
+        if(this.necroLevel)
+            this.necroLevel.textContent = '-';
+    });
+
+    onModsLoaded(() => {
+        game.monsters.forEach(monster => {
+            if(monster.attackType === "melee") {
+                monster.levels.Necromancy = monster.levels.Attack;
+            }
+            if(monster.attackType === "ranged") {
+                monster.levels.Necromancy = monster.levels.Ranged;
+            }
+            if(monster.attackType === "magic") {
+                monster.levels.Necromancy = monster.levels.Magic;
+            }
+        });
+    });
+
+    var observer = new MutationObserver(function(mutations) {
+        for (let mutation of mutations) {
+          if (mutation.type === 'childList') {
+            for (let node of mutation.addedNodes) {
+                if(node.tagName) {
+                    let evasion = node.querySelector('evasion-table');
+                    if(evasion && evasion.necroIcon === undefined && evasion.necroEvasion === undefined) {
+                        let magicDiv = evasion.magicEvasion.parentNode;
+
+                        evasion.necroIcon = createElement('img', {
+                            classList: ['skill-icon-xxs', 'mr-1'],
+                            attributes: [
+                                ['src', game.necromancy.media]
+                            ]
+                        });
+
+                        evasion.necroEvasion = createElement('span', {
+                            text: '-'
+                        });
+
+                        magicDiv.after(
+                            createElement('div', {
+                                children: [
+                                    createElement('span', {
+                                        children: [
+                                            evasion.necroIcon,
+                                            document.createTextNode(' '),
+                                            createElement('lang-string', {
+                                                attributes: [
+                                                    ['lang-id', 'COMBAT_MISC_15']
+                                                ],
+                                                text: 'Evasion'
+                                            })
+                                        ]
+                                    }),
+                                    evasion.necroEvasion
+                                ]
+                            })
+                        );
+
+                        evasion.addTooltip(evasion.necroIcon, 'Necromancy');
+                    }
+
+                    let combatLevels = node.querySelector('combat-levels');
+                    if(combatLevels && combatLevels.necroIcon === undefined && combatLevels.necroLevel === undefined) {
+                        let magicDiv = combatLevels.magicLevel.parentNode;
+
+                        combatLevels.necroIcon = createElement('img', {
+                            classList: ['skill-icon-xxs'],
+                            attributes: [
+                                ['src', game.necromancy.media]
+                            ]
+                        });
+
+                        combatLevels.necroLevel = createElement('small', {
+                            text: '-'
+                        });
+
+                        magicDiv.after(
+                            createElement('div', {
+                                children: [
+                                    createElement('span', {
+                                        children: [
+                                            combatLevels.necroIcon
+                                        ]
+                                    }),
+                                    combatLevels.necroLevel
+                                ]
+                            })
+                        );
+
+                        combatLevels.addTooltip(combatLevels.necroIcon, templateLangString('SKILL_LEVEL', {
+                            skillName: 'Necromancy'
+                        }));
+                    }
+                }
+            }
+          }
+        }
+        //if (document.contains(myElement)) {
+        //    console.log("It's in the DOM!");
+        //    observer.disconnect();
+        //}
+    });
+    observer.observe(document, {childList: true, subtree: true});
+     
+
+    onInterfaceAvailable(() => { 
+        //document.getElementById('evasion-table-template').content.
+
+        game.necromancy.component.mount(document.getElementById('main-container')); // Add skill container
+
         let itemViewCurrentOffence = document.getElementById('item-view-current-magicDamageBonus').nextSibling;
         itemViewCurrentOffence.after(
             createElement('br'),
@@ -476,180 +543,9 @@ export async function setup({ characterStorage, gameData, patch, loadTemplates, 
             }),
         )
 
-        document.getElementById('combat-player-defence-bonus-magic').nextElementSibling.remove();
-        document.getElementById('combat-player-defence-bonus-magic').parentElement.after(
-            createElement('div', {
-                classList: ['col-8'],
-                children: [
-                    createElement('h5', {
-                        classList: ['font-w400', 'font-size-sm', 'text-combat-smoke', 'm-1'],
-                        children: [
-                            createElement('img', {
-                                classList: ['skill-icon-xxs', 'm-0', 'mr-2', 'necro-icon'],
-                                attributes: [
-                                    ['src', game.necromancy.media]
-                                ]
-                            }),
-                            document.createTextNode(' '),
-                            createElement('lang-string', {
-                                attributes: [
-                                    ['lang-id', 'COMBAT_MISC_15']
-                                ],
-                                text: 'Evasion'
-                            }),
-                        ]
-                    })
-                ]
-            }),
-            createElement('div', {
-                classList: ['col-4'],
-                children: [
-                    createElement('h5', {
-                        id: 'combat-player-defence-bonus-necro',
-                        classList: ['font-w600', 'font-size-sm', 'text-combat-smoke', 'text-right',  'm-1'],
-                    }),
-                    createElement('br')
-                ]
-            }),
-        )
-        document.getElementById('combat-enemy-magic-evasion').parentElement.parentElement.after(
-            createElement('div', {
-                classList: ['col-8'],
-                children: [
-                    createElement('h5', {
-                        classList: ['font-w400', 'font-size-sm', 'text-combat-smoke', 'm-1'],
-                        children: [
-                            createElement('img', {
-                                classList: ['skill-icon-xxs', 'mr-2', 'necro-icon'],
-                                attributes: [
-                                    ['src', game.necromancy.media]
-                                ]
-                            }),
-                            document.createTextNode(' '),
-                            createElement('lang-string', {
-                                attributes: [
-                                    ['lang-id', 'COMBAT_MISC_15']
-                                ],
-                                text: 'Evasion'
-                            }),
-                        ]
-                    })
-                ]
-            }),
-            createElement('div', {
-                classList: ['col-4'],
-                children: [
-                    createElement('h5', {
-                        classList: ['font-w600', 'font-size-sm', 'text-combat-smoke', 'text-right', 'm-1'],
-                        children: [
-                            createElement('span', {
-                                id: 'combat-enemy-necro-evasion',
-                                text: '-'
-                            })
-                        ]
-                    }),
-                    createElement('br')
-                ]
-            }),
-        )
-
-        document.getElementById('combat-enemy-magic-level').parentElement
-        .parentElement.parentElement.after(createElement('div', {
-            classList: ['col-12', 'p-0'],
-            children: [
-                createElement('div', {
-                    classList: ['media', 'd-flex', 'align-items-center', 'mb-3'],
-                    children: [
-                        createElement('div', {
-                            classList: ['mr-1'],
-                            children: [
-                                createElement('img', {
-                                    classList: ['skill-icon-xs'],
-                                    attributes: [
-                                        ['src', game.necromancy.media]
-                                    ]
-                                })
-                            ]
-                        }),
-                        createElement('div', {
-                            classList: ['mr-1'],
-                            children: [
-                                createElement('small', {
-                                    id: 'combat-enemy-necromancy-level',
-                                    text: '-'
-                                })
-                            ]
-                        })
-                    ]
-                })
-            ]
-        }));
         document.getElementById('magic-attack-style-buttons').after(createElement('div', {
             id: `necro-attack-style-buttons`,
             classList: ['row', 'gutters-tiny']
         }));
-        document.getElementById('combat-skill-progress-menu').firstElementChild.append(createElement('tbody', {
-            children: [
-                createElement('tr', {
-                    children: [
-                        createElement('th', {
-                            classList: ['text-center'],
-                            attributes: [
-                                ['scope', 'row']
-                            ],
-                            children: [createElement('img', {
-                                classList: ['skill-icon-xs'],
-                                attributes: [
-                                    ['src', game.necromancy.media]
-                                ]
-                            })]
-                        }),
-                        createElement('td', {
-                            classList: ['font-w600', 'font-size-sm'],
-                            children: [createElement('small', {
-                                id: `skill-progress-level-${game.necromancy.id}`,
-                                text: '69 / 99'
-                            })]
-                        }),
-                        createElement('td', {
-                            classList: ['font-w600', 'font-size-sm'],
-                            children: [createElement('small', {
-                                id: `skill-progress-percent-${game.necromancy.id}`,
-                                text: '69%'
-                            })]
-                        }),
-                        createElement('td', {
-                            classList: ['font-w600', 'font-size-sm', 'd-none', 'd-md-table-cell'],
-                            children: [createElement('small', {
-                                id: `skill-progress-xp-${game.necromancy.id}`,
-                                text: '690 / 6,900 XP'
-                            })]
-                        }),
-                        createElement('td', {
-                            children: [
-                                createElement('div', {
-                                    id: `skill-progress-xp-tooltip-${game.necromancy.id}`,
-                                    classList: ['progress', 'active'],
-                                    attributes: [
-                                        ['style', 'height: 8px']
-                                    ],
-                                    children: [createElement('div', {
-                                        id: `skill-progress-bar-${game.necromancy.id}`,
-                                        attributes: [
-                                            ['role', 'progressbar'],
-                                            ['style', 'width: 69%;'],
-                                            ['aria-valuenow', '0'],
-                                            ['aria-valuemin', '0'],
-                                            ['aria-valuemax', '100']
-                                        ],
-                                        classList: ['progress-bar', 'bg-info'],
-                                    })]
-                                }),
-                            ]
-                        }),
-                    ]
-                })
-            ]
-        }))
     });
 }

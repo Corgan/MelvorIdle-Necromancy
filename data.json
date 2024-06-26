@@ -1,7 +1,126 @@
 {
-  "$schema": "https://melvoridle.com/assets/schema/gameData.json",
+  "$schema": "https://www.melvoridle.com/assets/schema/gameData.json",
   "namespace": "necromancy",
   "data": {
+    "pages": [
+      {
+        "id": "Necromancy",
+        "media": "assets/necromancy.png",
+        "containerID": "necromancy-container",
+        "headerBgClass": "bg-combat",
+        "hasGameGuide": false,
+        "canBeDefault": true,
+        "customName": "Alt. Necromancy",
+        "skillSidebarCategoryID": "Non-Combat",
+        "skills": [
+          "necromancy:Necromancy"
+        ]
+      }
+    ],
+    "modifiers": [
+      {
+        "id": "necroEvasion",
+        "isCombat": true,
+        "allowEnemy": true,
+        "allowedScopes": [
+          {
+            "scopes": {},
+            "descriptions": [
+              {
+                "text": "-${value}% Necro Evasion",
+                "lang": "MODIFIER_DATA_decreasedNecroEvasion",
+                "below": 0,
+                "includeSign": false
+              },
+              {
+                "text": "+${value}% Necro Evasion",
+                "lang": "MODIFIER_DATA_increasedNecroEvasion",
+                "above": 0,
+                "includeSign": false
+              }
+            ],
+            "posAliases": [
+              {
+                "key": "increasedNecroEvasion"
+              }
+            ],
+            "negAliases": [
+              {
+                "key": "decreasedNecroEvasion"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "flatNecromancyAttackBonus",
+        "isCombat": true,
+        "allowEnemy": true,
+        "allowedScopes": [
+          {
+            "scopes": {},
+            "descriptions": [
+              {
+                "text": "-${value}% Necromancy Attack Bonus",
+                "lang": "MODIFIER_DATA_decreasedNecromancyAttackBonus",
+                "below": 0,
+                "includeSign": false
+              },
+              {
+                "text": "+${value}% Necromancy Attack Bonus",
+                "lang": "MODIFIER_DATA_increasedNecromancyAttackBonus",
+                "above": 0,
+                "includeSign": false
+              }
+            ],
+            "posAliases": [
+              {
+                "key": "increasedFlatNecromancyAttackBonus"
+              }
+            ],
+            "negAliases": [
+              {
+                "key": "decreasedFlatNecromancyAttackBonus"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "flatNecromancStrengthBonus",
+        "isCombat": true,
+        "allowEnemy": true,
+        "allowedScopes": [
+          {
+            "scopes": {},
+            "descriptions": [
+              {
+                "text": "-${value}% Necromancy Strength Rating",
+                "lang": "MODIFIER_DATA_decreasedNecromancyStrengthBonus",
+                "below": 0,
+                "includeSign": false
+              },
+              {
+                "text": "+${value}% Necromancy Strength Rating",
+                "lang": "MODIFIER_DATA_increasedNecromancyStrengthBonus",
+                "above": 0,
+                "includeSign": false
+              }
+            ],
+            "posAliases": [
+              {
+                "key": "increasedFlatNecromancyStrengthBonus"
+              }
+            ],
+            "negAliases": [
+              {
+                "key": "decreasedFlatNecromancyStrengthBonus"
+              }
+            ]
+          }
+        ]
+      }
+    ],
     "attackStyles": [
       {
         "id": "Necromancy",
@@ -18,6 +137,33 @@
           {
             "skillID": "necromancy:Necromancy",
             "ratio": 4
+          }
+        ],
+        "attackType": "necro"
+      },
+      {
+        "id": "Foresight",
+        "name": "Foresight",
+        "modifiers": {
+          "increasedHiddenSkillLevel": [
+            {
+              "skillID": "necromancy:Necromancy",
+              "value": 3
+            },
+            {
+              "skillID": "melvorD:Defence",
+              "value": 3
+            }
+          ]
+        },
+        "experienceGain": [
+          {
+            "skillID": "necromancy:Necromancy",
+            "ratio": 2
+          },
+          {
+            "skillID": "melvorD:Defence",
+            "ratio": 2
           }
         ],
         "attackType": "necro"
@@ -290,21 +436,6 @@
       {
         "skillID": "necromancy:Necromancy",
         "data": {}
-      }
-    ]
-  },
-  "modifications": {
-    "monsters": [
-      {
-        "id": "melvorD:DarkWizard",
-        "equipmentStats": {
-          "add": [
-            { "key": "necroDefenceBonus", "value": 30 }
-          ]
-        },
-        "levels": {
-          "Necromancy": 40
-        }
       }
     ]
   }
