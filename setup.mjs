@@ -278,7 +278,7 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
 
 
     console.log("Registering Necromancy Data");
-    await gameData.addPackage('data.json'); // Add skill data (page + sidebar, skillData)
+    await gameData.addPackage('data/data.json'); // Add skill data (page + sidebar, skillData)
 
     console.log('Registered Necromancy Data.');
 
