@@ -279,30 +279,154 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
 
     console.log("Registering Necromancy Data");
     await gameData.addPackage('data/data.json'); // Add skill data (page + sidebar, skillData)
+    
+    if(cloudManager.hasAoDEntitlementAndIsEnabled)
+        await gameData.addPackage('data/data-aod.json');
 
     console.log('Registered Necromancy Data.');
 
+    function ensureEvasion(evasion) {
+        if(evasion && evasion.necroIcon === undefined && evasion.necroEvasion === undefined) {
+            let magicDiv = evasion.magicEvasion.parentNode;
+
+            evasion.necroIcon = createElement('img', {
+                classList: ['skill-icon-xxs', 'mr-1'],
+                attributes: [
+                    ['src', game.necromancy.media]
+                ]
+            });
+
+            evasion.necroEvasion = createElement('span', {
+                text: '-'
+            });
+
+            magicDiv.after(
+                createElement('div', {
+                    children: [
+                        createElement('span', {
+                            children: [
+                                evasion.necroIcon,
+                                document.createTextNode(' '),
+                                createElement('lang-string', {
+                                    attributes: [
+                                        ['lang-id', 'COMBAT_MISC_15']
+                                    ],
+                                    text: 'Evasion'
+                                })
+                            ]
+                        }),
+                        evasion.necroEvasion
+                    ]
+                })
+            );
+
+            evasion.addTooltip(evasion.necroIcon, 'Necromancy');
+        }
+    }
+
+    function ensureLevels(combatLevels) {
+        if(combatLevels && combatLevels.necroIcon === undefined && combatLevels.necroLevel === undefined) {
+            let magicDiv = combatLevels.magicLevel.parentNode;
+
+            combatLevels.necroIcon = createElement('img', {
+                classList: ['skill-icon-xxs'],
+                attributes: [
+                    ['src', game.necromancy.media]
+                ]
+            });
+
+            combatLevels.necroLevel = createElement('small', {
+                text: '-'
+            });
+
+            magicDiv.after(
+                createElement('div', {
+                    children: [
+                        createElement('span', {
+                            children: [
+                                combatLevels.necroIcon
+                            ]
+                        }),
+                        combatLevels.necroLevel
+                    ]
+                })
+            );
+
+            combatLevels.addTooltip(combatLevels.necroIcon, templateLangString('SKILL_LEVEL', {
+                skillName: 'Necromancy'
+            }));
+        }
+    }
+
     patch(EvasionTableElement, 'setStats').after(function(_, character) {
+        ensureEvasion(this);
         if(this.necroEvasion)
             this.necroEvasion.textContent = formatNumber(character.stats.evasion.necro);
     });
 
     patch(EvasionTableElement, 'setEmpty').after(function() {
+        ensureEvasion(this);
         if(this.necroEvasion)
             this.necroEvasion.textContent = '-';
     });
 
     patch(CombatLevelsElement, 'setLevels').after(function(_, character) {
+        ensureLevels(this);
         if(this.necroLevel)
             this.necroLevel.textContent = formatNumber(character.levels.Necromancy);
     });
 
     patch(CombatLevelsElement, 'setEmpty').after(function() {
+        ensureLevels(this);
         if(this.necroLevel)
             this.necroLevel.textContent = '-';
     });
 
-    onModsLoaded(() => {
+    onModsLoaded(async () => {
+        if(cloudManager.hasAoDEntitlementAndIsEnabled) {
+            const levelCapIncreases = ['necromancy:Pre99Dungeons', 'necromancy:ImpendingDarknessSet100'];
+
+            if(cloudManager.hasTotHEntitlementAndIsEnabled) {
+                levelCapIncreases.push(...['necromancy:Post99Dungeons', 'necromancy:ThroneOfTheHeraldSet120']);
+            }
+
+            const gamemodes = game.gamemodes.filter(gamemode => gamemode.defaultInitialLevelCap !== undefined && gamemode.levelCapIncreases.length > 0 && gamemode.useDefaultSkillUnlockRequirements === true && gamemode.allowSkillUnlock === false);
+
+            await gameData.addPackage({
+                $schema: '',
+                namespace: 'necromancy',
+                modifications: {
+                    gamemodes: gamemodes.map(gamemode => ({
+                        id: gamemode.id,
+                        levelCapIncreases: {
+                            add: levelCapIncreases
+                        },
+                        startingSkills: {
+                            add: ['necromancy:Necromancy']
+                        },
+                        skillUnlockRequirements: [
+                            {
+                                skillID: 'necromancy:Necromancy',
+                                requirements: [
+                                    {
+                                        type: 'SkillLevel',
+                                        skillID: 'melvorD:Attack',
+                                        level: 1
+                                    }
+                                ]
+                            }
+                        ]
+                    }))
+                }
+            });
+        }
+    
+        patch(EventManager, 'loadEvents').after(() => {
+            if(game.currentGamemode.startingSkills !== undefined && game.currentGamemode.startingSkills.has(game.necromancy)) {
+                game.necromancy.setUnlock(true);
+            }
+        });
+
         game.monsters.forEach(monster => {
             if(monster.attackType === "melee") {
                 monster.levels.Necromancy = monster.levels.Attack;
@@ -316,231 +440,312 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
         });
     });
 
-    var observer = new MutationObserver(function(mutations) {
-        for (let mutation of mutations) {
-          if (mutation.type === 'childList') {
-            for (let node of mutation.addedNodes) {
-                if(node.tagName) {
-                    let evasion = node.querySelector('evasion-table');
-                    if(evasion && evasion.necroIcon === undefined && evasion.necroEvasion === undefined) {
-                        let magicDiv = evasion.magicEvasion.parentNode;
+    patch(ItemUpgradeMenuElement, 'setEquipmentStats').before(function() {
+        if(this.equipStats.necroAttackBonus === undefined &&
+            this.equipStats.necroStrengthBonus === undefined &&
+            this.equipStats.necroDefenceBonus === undefined &&
+            this.equipStatDiffs.necroAttackBonus === undefined &&
+            this.equipStatDiffs.necroStrengthBonus === undefined &&
+            this.equipStatDiffs.necroDefenceBonus === undefined
+        ) {
+            let offenceContainer = this.equipStats.magicAttackBonus.parentNode.parentNode.parentNode;
+            let defenceContainer = this.equipStats.magicDefenceBonus.parentNode.parentNode;
 
-                        evasion.necroIcon = createElement('img', {
-                            classList: ['skill-icon-xxs', 'mr-1'],
-                            attributes: [
-                                ['src', game.necromancy.media]
+            
+            this.equipStats.necroAttackBonus = createElement('span', {
+                classList: ['font-w600']
+            });
+            this.equipStatDiffs.necroAttackBonus = createElement('span', {
+                classList: ['text-success']
+            });
+            this.equipStats.necroStrengthBonus = createElement('span', {
+                classList: ['font-w600']
+            });
+            this.equipStatDiffs.necroStrengthBonus = createElement('span', {
+                classList: ['text-success']
+            });
+            this.equipStats.necroDefenceBonus = createElement('span', {
+                classList: ['font-w600']
+            });
+            this.equipStatDiffs.necroDefenceBonus = createElement('span', {
+                classList: ['text-success']
+            });
+
+            offenceContainer.append(
+                createElement('div', {
+                    classList: ['row', 'font-w400', 'font-size-sm', 'text-combat-smoke', 'p-2', 'pb-0', 'justify-horizontal-center'],
+                    children: [
+                        createElement('div', {
+                            classList: ['col-8'],
+                            children: [
+                                createElement('img', {
+                                    classList: ['skill-icon-xxs'],
+                                    attributes: [
+                                        ['src', game.necromancy.media]
+                                    ]
+                                }),
+                                document.createTextNode(' '),
+                                createElement('lang-string', {
+                                    attributes: [
+                                        ['lang-id', 'EQUIPMENT_STAT_ATTACK_BONUS']
+                                    ],
+                                    text: 'Attack Bonus:'
+                                })
                             ]
-                        });
+                        }),
+                        createElement('div', {
+                            classList: ['col-4'],
+                            children: [
+                                this.equipStats.necroAttackBonus,
+                                document.createTextNode(' '),
+                                this.equipStatDiffs.necroAttackBonus
+                            ]
+                        }),
+                        createElement('div', {
+                            classList: ['col-8'],
+                            children: [
+                                createElement('img', {
+                                    classList: ['skill-icon-xxs'],
+                                    attributes: [
+                                        ['src', game.necromancy.media]
+                                    ]
+                                }),
+                                document.createTextNode(' '),
+                                createElement('lang-string', {
+                                    attributes: [
+                                        ['lang-id', 'EQUIPMENT_STAT_STRENGTH_BONUS']
+                                    ],
+                                    text: 'Strength Bonus:'
+                                })
+                            ]
+                        }),
+                        createElement('div', {
+                            classList: ['col-4'],
+                            children: [
+                                this.equipStats.necroStrengthBonus,
+                                document.createTextNode(' '),
+                                this.equipStatDiffs.necroStrengthBonus
+                            ]
+                        })
+                    ]
+                })
+            );
 
-                        evasion.necroEvasion = createElement('span', {
-                            text: '-'
-                        });
-
-                        magicDiv.after(
-                            createElement('div', {
-                                children: [
-                                    createElement('span', {
-                                        children: [
-                                            evasion.necroIcon,
-                                            document.createTextNode(' '),
-                                            createElement('lang-string', {
-                                                attributes: [
-                                                    ['lang-id', 'COMBAT_MISC_15']
-                                                ],
-                                                text: 'Evasion'
-                                            })
-                                        ]
-                                    }),
-                                    evasion.necroEvasion
-                                ]
-                            })
-                        );
-
-                        evasion.addTooltip(evasion.necroIcon, 'Necromancy');
-                    }
-
-                    let combatLevels = node.querySelector('combat-levels');
-                    if(combatLevels && combatLevels.necroIcon === undefined && combatLevels.necroLevel === undefined) {
-                        let magicDiv = combatLevels.magicLevel.parentNode;
-
-                        combatLevels.necroIcon = createElement('img', {
+            defenceContainer.append(
+                createElement('div', {
+                    classList: ['col-8'],
+                    children: [
+                        createElement('img', {
                             classList: ['skill-icon-xxs'],
                             attributes: [
                                 ['src', game.necromancy.media]
                             ]
-                        });
-
-                        combatLevels.necroLevel = createElement('small', {
-                            text: '-'
-                        });
-
-                        magicDiv.after(
-                            createElement('div', {
-                                children: [
-                                    createElement('span', {
-                                        children: [
-                                            combatLevels.necroIcon
-                                        ]
-                                    }),
-                                    combatLevels.necroLevel
-                                ]
-                            })
-                        );
-
-                        combatLevels.addTooltip(combatLevels.necroIcon, templateLangString('SKILL_LEVEL', {
-                            skillName: 'Necromancy'
-                        }));
-                    }
-                }
-            }
-          }
+                        }),
+                        document.createTextNode(' '),
+                        createElement('lang-string', {
+                            attributes: [
+                                ['lang-id', 'EQUIPMENT_STAT_DEFENCE_BONUS']
+                            ],
+                            text: 'Defence Bonus:'
+                        })
+                    ]
+                }),
+                createElement('div', {
+                    classList: ['col-4'],
+                    children: [
+                        this.equipStats.necroDefenceBonus,
+                        document.createTextNode(' '),
+                        this.equipStatDiffs.necroDefenceBonus
+                    ]
+                }),
+            )
         }
-        //if (document.contains(myElement)) {
-        //    console.log("It's in the DOM!");
-        //    observer.disconnect();
-        //}
-    });
-    observer.observe(document, {childList: true, subtree: true});
-     
+    })
 
     onInterfaceAvailable(() => { 
-        //document.getElementById('evasion-table-template').content.
-
         game.necromancy.component.mount(document.getElementById('main-container')); // Add skill container
 
-        let itemViewCurrentOffence = document.getElementById('item-view-current-magicDamageBonus').nextSibling;
+        let itemViewCurrentOffence = document.getElementById('item-view-current-magicDamageBonus').parentNode;
         itemViewCurrentOffence.after(
-            createElement('br'),
-            createElement('img', {
-                classList: ['skill-icon-xs'],
-                attributes: [
-                    ['src', game.necromancy.media]
+            createElement('div', {
+                classList: ['col-8'],
+                children: [
+                    createElement('img', {
+                        classList: ['skill-icon-xxs'],
+                        attributes: [
+                            ['src', game.necromancy.media]
+                        ]
+                    }),
+                    document.createTextNode(' '),
+                    createElement('lang-string', {
+                        attributes: [
+                            ['lang-id', 'EQUIPMENT_STAT_ATTACK_BONUS']
+                        ],
+                        text: 'Attack Bonus:'
+                    })
                 ]
             }),
-            document.createTextNode(' '),
-            createElement('lang-string', {
-                attributes: [
-                    ['lang-id', 'EQUIPMENT_STAT_ATTACK_BONUS']
-                ],
-                text: 'Attack Bonus:'
-            }),
-            document.createTextNode(' '),
-            createElement('span', {
-                id: 'item-view-current-necroAttackBonus'
-            }),
-            createElement('br'),
-            createElement('img', {
-                classList: ['skill-icon-xs'],
-                attributes: [
-                    ['src', game.necromancy.media]
+            createElement('div', {
+                classList: ['col-4'],
+                children: [
+                    createElement('span', {
+                        id: 'item-view-current-necroAttackBonus'
+                    })
                 ]
             }),
-            document.createTextNode(' '),
-            createElement('lang-string', {
-                attributes: [
-                    ['lang-id', 'EQUIPMENT_STAT_STRENGTH_BONUS']
-                ],
-                text: 'Strength Bonus:'
+            createElement('div', {
+                classList: ['col-8'],
+                children: [
+                    createElement('img', {
+                        classList: ['skill-icon-xxs'],
+                        attributes: [
+                            ['src', game.necromancy.media]
+                        ]
+                    }),
+                    document.createTextNode(' '),
+                    createElement('lang-string', {
+                        attributes: [
+                            ['lang-id', 'EQUIPMENT_STAT_STRENGTH_BONUS']
+                        ],
+                        text: 'Strength Bonus:'
+                    })
+                ]
             }),
-            document.createTextNode(' '),
-            createElement('span', {
-                id: 'item-view-current-necroStrengthBonus'
-            }),
+            createElement('div', {
+                classList: ['col-4'],
+                children: [
+                    createElement('span', {
+                        id: 'item-view-current-necroStrengthBonus'
+                    })
+                ]
+            })
         )
 
-        let itemViewCurrentDefence = document.getElementById('item-view-current-magicDefenceBonus');
+        let itemViewCurrentDefence = document.getElementById('item-view-current-magicDefenceBonus').parentNode;
         itemViewCurrentDefence.after(
-            createElement('br'),
-            createElement('img', {
-                classList: ['skill-icon-xs'],
-                attributes: [
-                    ['src', game.necromancy.media]
+            createElement('div', {
+                classList: ['col-8'],
+                children: [
+                    createElement('img', {
+                        classList: ['skill-icon-xxs'],
+                        attributes: [
+                            ['src', game.necromancy.media]
+                        ]
+                    }),
+                    document.createTextNode(' '),
+                    createElement('lang-string', {
+                        attributes: [
+                            ['lang-id', 'EQUIPMENT_STAT_DEFENCE_BONUS']
+                        ],
+                        text: 'Defence Bonus:'
+                    })
                 ]
             }),
-            document.createTextNode(' '),
-            createElement('lang-string', {
-                attributes: [
-                    ['lang-id', 'EQUIPMENT_STAT_DEFENCE_BONUS']
-                ],
-                text: 'Defence Bonus:'
-            }),
-            document.createTextNode(' '),
-            createElement('span', {
-                id: 'item-view-current-necroDefenceBonus'
-            }),
+            createElement('div', {
+                classList: ['col-4'],
+                children: [
+                    createElement('span', {
+                        id: 'item-view-current-necroDefenceBonus'
+                    })
+                ]
+            })
         )
-        let itemViewDifOffence = document.getElementById('item-view-dif-magicDamageBonus').nextSibling;
+        let itemViewDifOffence = document.getElementById('item-view-dif-magicDamageBonus').parentNode;
         itemViewDifOffence.after(
-            createElement('br'),
-            createElement('img', {
-                classList: ['skill-icon-xs'],
-                attributes: [
-                    ['src', game.necromancy.media]
+            createElement('div', {
+                classList: ['col-8'],
+                children: [
+                    createElement('img', {
+                        classList: ['skill-icon-xxs'],
+                        attributes: [
+                            ['src', game.necromancy.media]
+                        ]
+                    }),
+                    document.createTextNode(' '),
+                    createElement('lang-string', {
+                        attributes: [
+                            ['lang-id', 'EQUIPMENT_STAT_ATTACK_BONUS']
+                        ],
+                        text: 'Attack Bonus:'
+                    }),
                 ]
             }),
-            document.createTextNode(' '),
-            createElement('lang-string', {
-                attributes: [
-                    ['lang-id', 'EQUIPMENT_STAT_ATTACK_BONUS']
-                ],
-                text: 'Attack Bonus:'
-            }),
-            document.createTextNode(' '),
-            createElement('span', {
-                id: 'item-view-necroAttackBonus'
-            }),
-            document.createTextNode(' '),
-            createElement('span', {
-                id: 'item-view-dif-necroAttackBonus'
-            }),
-            createElement('br'),
-            createElement('img', {
-                classList: ['skill-icon-xs'],
-                attributes: [
-                    ['src', game.necromancy.media]
+            createElement('div', {
+                classList: ['col-4'],
+                children: [
+                    createElement('span', {
+                        id: 'item-view-necroAttackBonus'
+                    }),
+                    document.createTextNode(' '),
+                    createElement('span', {
+                        id: 'item-view-dif-necroAttackBonus'
+                    })
                 ]
             }),
-            document.createTextNode(' '),
-            createElement('lang-string', {
-                attributes: [
-                    ['lang-id', 'EQUIPMENT_STAT_STRENGTH_BONUS']
-                ],
-                text: 'Strength Bonus:'
+            createElement('div', {
+                classList: ['col-8'],
+                children: [
+                    createElement('img', {
+                        classList: ['skill-icon-xxs'],
+                        attributes: [
+                            ['src', game.necromancy.media]
+                        ]
+                    }),
+                    document.createTextNode(' '),
+                    createElement('lang-string', {
+                        attributes: [
+                            ['lang-id', 'EQUIPMENT_STAT_STRENGTH_BONUS']
+                        ],
+                        text: 'Strength Bonus:'
+                    }),
+                ]
             }),
-            document.createTextNode(' '),
-            createElement('span', {
-                id: 'item-view-necroStrengthBonus'
-            }),
-            document.createTextNode(' '),
-            createElement('span', {
-                id: 'item-view-dif-necroStrengthBonus'
-            }),
+            createElement('div', {
+                classList: ['col-4'],
+                children: [
+                    createElement('span', {
+                        id: 'item-view-necroStrengthBonus'
+                    }),
+                    document.createTextNode(' '),
+                    createElement('span', {
+                        id: 'item-view-dif-necroStrengthBonus'
+                    }),
+                ]
+            })
         )
 
-        let itemViewDifDefence = document.getElementById('item-view-dif-magicDefenceBonus').nextSibling;
+        let itemViewDifDefence = document.getElementById('item-view-dif-magicDefenceBonus').parentNode;
         itemViewDifDefence.after(
-            createElement('br'),
-            createElement('img', {
-                classList: ['skill-icon-xs'],
-                attributes: [
-                    ['src', game.necromancy.media]
+            createElement('div', {
+                classList: ['col-8'],
+                children: [
+                    createElement('img', {
+                        classList: ['skill-icon-xxs'],
+                        attributes: [
+                            ['src', game.necromancy.media]
+                        ]
+                    }),
+                    document.createTextNode(' '),
+                    createElement('lang-string', {
+                        attributes: [
+                            ['lang-id', 'EQUIPMENT_STAT_DEFENCE_BONUS']
+                        ],
+                        text: 'Defence Bonus:'
+                    }),
                 ]
             }),
-            document.createTextNode(' '),
-            createElement('lang-string', {
-                attributes: [
-                    ['lang-id', 'EQUIPMENT_STAT_DEFENCE_BONUS']
-                ],
-                text: 'Defence Bonus:'
-            }),
-            document.createTextNode(' '),
-            createElement('span', {
-                id: 'item-view-necroDefenceBonus'
-            }),
-            document.createTextNode(' '),
-            createElement('span', {
-                id: 'item-view-dif-necroDefenceBonus'
-            }),
+            createElement('div', {
+                classList: ['col-4'],
+                children: [
+                    createElement('span', {
+                        id: 'item-view-necroDefenceBonus'
+                    }),
+                    document.createTextNode(' '),
+                    createElement('span', {
+                        id: 'item-view-dif-necroDefenceBonus'
+                    }),
+                ]
+            })
         )
 
         document.getElementById('magic-attack-style-buttons').after(createElement('div', {
