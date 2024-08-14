@@ -1,4 +1,4 @@
-export async function setup({ name, characterStorage, gameData, patch, loadTemplates, loadModule, onModsLoaded, onCharacterSelectionLoaded, onInterfaceAvailable, onCharacterLoaded, onInterfaceReady }) {
+export async function setup({ name, namespace, characterStorage, gameData, patch, loadTemplates, loadModule, onModsLoaded, onCharacterSelectionLoaded, onInterfaceAvailable, onCharacterLoaded, onInterfaceReady }) {
     patch(CombatManager, 'combatTriangle').get(function(o) {
         let triangle = o();
         
@@ -19,6 +19,10 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
     loadedLangJson['EQUIPMENT_STAT_necroAttackBonus'] = '${statValue} Necromancy Attack Bonus';
     loadedLangJson['EQUIPMENT_STAT_necroStrengthBonus'] = '${statValue} Necromancy Strength Bonus';
     loadedLangJson['EQUIPMENT_STAT_necroDefenceBonus'] = '${statValue} Necromancy Defence Bonus';
+    loadedLangJson['COMBAT_MISC_necro_vs_melee'] = 'Necromancy vs. Melee';
+    loadedLangJson['COMBAT_MISC_necro_vs_ranged'] = 'Necromancy vs. Ranged';
+    loadedLangJson['COMBAT_MISC_necro_vs_magic'] = 'Necromancy vs. Magic';
+    loadedLangJson['COMBAT_MISC_necro_vs_necro'] = 'Necromancy vs. Necromancy';
 
     console.log("Loading Necromancy Templates");
     await loadTemplates("templates.html"); // Add templates
@@ -30,42 +34,177 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
 
     let skills = game.pages.getObjectByID('melvorD:Combat').skills;
     skills.splice(skills.indexOf(game.altMagic)+1, 0, game.necromancy);
+
+    MonsterSelectTableElement.attackTypeMedia.necro = game.necromancy.media;
     
-    rollData['MaxHitModAccuracy'] = {
+    rollData['AmplifiedMaxHit'] = {
         formatPercent: (value)=>`\${${value}}%`,
         formatName: (name)=>` of ${name} max hit`,
     }
-
-    rollData['MinHitModAccuracy'] = {
+    rollData['AmplifiedMinHit'] = {
         formatPercent: (value)=>`\${${value}}%`,
         formatName: (name)=>` of ${name} min hit`,
     }
 
+    rollData['MaxHitScaledByMissingHP'] = {
+        formatPercent: (value)=>`\${${value}}%`,
+        formatName: (name)=>` of ${name} max hit multiplied by ${name} missing hitpoints percent`,
+    }
+    rollData['MinHitScaledByMissingHP'] = {
+        formatPercent: (value)=>`\${${value}}%`,
+        formatName: (name)=>` of ${name} min hit multiplied by ${name} missing hitpoints percent`,
+    }
+
     const _getDamageRoll = getDamageRoll;
     getDamageRoll = function(character, type, percent, damageDealt=0, damageTaken=0) {
-        let value = 0;
-        if(type === 'MaxHitModAccuracy' || type === 'MinHitModAccuracy') {
+        if(character.attackType === 'necro') {
             let damageMod = 1;
-            if(character.manager.fightInProgress) {
-                const targetEvasion = character.target.stats.evasion[character.attackType];
-                const accuracy = character.stats.accuracy;
-                if (accuracy < targetEvasion) {
-                    damageMod = ((0.5 * accuracy) / targetEvasion);
-                } else {
-                    damageMod = (1 - (0.5 * targetEvasion) / accuracy);
+            if(character.manager.fightInProgress)
+                damageMod = (character.stats.hitChance / 100);
+
+                if(type === 'AmplifiedMaxHit') {
+                    let foundDamage = character.nextAttack.damage.find(d => d.maxRoll === type && d.maxPercent === percent);
+                    let ampedValue = 0;
+                    if(foundDamage !== undefined) {
+                        let { effectID, paramName, statGroupName, amountMax, amplifyAmount } = foundDamage.amplifyEffect;
+                        let effect = game.combatEffects.getObjectSafe(effectID);
+                        let target = foundDamage.amplifyEffect.target === "Self" ? character : character.target;
+                        let existingEffect = target.activeEffects.get(effect);
+                        let stacks = 0;
+                        if(existingEffect !== undefined) {
+                            if(paramName !== undefined)
+                                stacks = existingEffect.getParameter(paramName);
+                            if(statGroupName !== undefined)
+                                stacks = existingEffect.getStatGroup(statGroupName);
+                            if(amountMax !== undefined)
+                                stacks = Math.min(stacks, amountMax);
+                        }
+                        ampedValue = stacks * amplifyAmount;
+                    }
+                    type = 'MaxHit'
+                    percent = percent + ampedValue;
+                }
+                if(type === 'AmplifiedMinHit') {
+                    let foundDamage = character.nextAttack.damage.find(d => d.minRoll === type && d.minPercent === percent);
+                    let ampedValue = 0;
+                    if(foundDamage !== undefined) {
+                        let { effectID, paramName, statGroupName, amountMax, amplifyAmount } = foundDamage.amplifyEffect;
+                        let effect = game.combatEffects.getObjectSafe(effectID);
+                        let target = foundDamage.amplifyEffect.target === "Self" ? character : character.target;
+                        let existingEffect = target.activeEffects.get(effect);
+                        let stacks = 0;
+                        if(existingEffect !== undefined) {
+                            if(paramName !== undefined)
+                                stacks = existingEffect.getParameter(paramName);
+                            if(statGroupName !== undefined)
+                                stacks = existingEffect.getStatGroup(statGroupName);
+                            if(amountMax !== undefined)
+                                stacks = Math.min(stacks, amountMax);
+                        }
+                        ampedValue = stacks * amplifyAmount;
+                    }
+                    type = 'MinHit'
+                    percent = percent + ampedValue;
+                }
+                if(type === 'MaxHitScaledByMissingHP') {
+                    type = 'MaxHit';
+                    percent = percent * (1 + Math.floor(character.target.hitpointsPercent / 100));
+                }
+                if(type === 'MinHitScaledByMissingHP') {
+                    type = 'MinHit'
+                    percent = percent * (1 + Math.floor(character.target.hitpointsPercent / 100));
+                }
+            return Math.floor(_getDamageRoll(character, type, percent, damageDealt, damageTaken) * damageMod);
+        } else {
+            return _getDamageRoll(character, type, percent, damageDealt, damageTaken);
+        }
+    }
+
+    patch(Player, 'onHit').after(function() {
+        this.nextAttack.damage.forEach(damage => {
+            if(damage.maxRoll === 'AmplifiedMaxHit' || damage.minRoll === 'AmplifiedMinHit') {
+                let { effectID, paramName, statGroupName, amountMax, amplifyAmount } = damage.amplifyEffect;
+                let effect = game.combatEffects.getObjectSafe(effectID);
+                let target = damage.amplifyEffect.target === "Self" ? this : this.target;
+                let existingEffect = target.activeEffects.get(effect);
+                if(existingEffect !== undefined) {
+                    let stacks = 0;
+                    let existingStacks = 0;
+
+                    if(paramName !== undefined)
+                        existingStacks = existingEffect.getParameter(paramName);
+                    if(statGroupName !== undefined)
+                        existingStacks = existingEffect.getStatGroup(statGroupName);
+
+                    stacks += existingStacks;
+                    if(amountMax !== undefined)
+                        stacks = Math.min(stacks, amountMax);
+
+                    if(stacks > 0) {
+                        if(paramName !== undefined)
+                            existingEffect.setParameter(paramName, Math.max(0, existingStacks - stacks));
+                        if(statGroupName !== undefined)
+                            existingEffect.setStats(statGroupName, Math.max(0, existingStacks - stacks));
+                    }
                 }
             }
+        });
 
-            if(type === 'MaxHitModAccuracy') {
-                value = Math.floor(character.stats.maxHit * damageMod);
-            } else if (type === 'MinHitModAccuracy') {
-                value = Math.floor(character.stats.minHit * damageMod);
+        let spell = game.necromancy.selectedAugurySpell;
+        if(!this.isAttacking && spell !== undefined && spell.consumesEffect !== undefined && spell.specialAttacks.includes(this.nextAttack)) {
+            let target = spell.consumesEffect.target === "Self" ? this : this.target;
+            const existingEffect = target.activeEffects.get(spell.consumesEffect.effect);
+            if(existingEffect !== undefined) {
+                let stackCount = 0;
+                if(spell.consumesEffect.paramName !== undefined)
+                    stackCount += existingEffect.getParameter(spell.consumesEffect.paramName);
+                if(spell.consumesEffect.statGroupName !== undefined)
+                    stackCount += existingEffect.getStatGroup(spell.consumesEffect.statGroupName);
+
+                let toRemove = Math.min(stackCount, spell.consumesEffect.amountMax);
+
+                if(toRemove <= stackCount) {
+                    target.removeCombatEffect(spell.consumesEffect.effect);
+                } else {
+                    if(spell.consumesEffect.paramName !== undefined)
+                        existingEffect.setParameter(spell.consumesEffect.paramName, stackCount - toRemove);
+                    if(spell.consumesEffect.statGroupName !== undefined)
+                        existingEffect.getStats(spell.consumesEffect.statGroupName, stackCount - toRemove);
+                }
             }
-        } else {
-            return _getDamageRoll(character, type, percent, damageDealt);
         }
-        return Math.floor((value * percent) / 100);
-    }
+    });
+
+    patch(Enemy, 'onHit').after(function() {
+        this.nextAttack.damage.forEach(damage => {
+            if(damage.maxRoll === 'AmplifiedMaxHit' || damage.minRoll === 'AmplifiedMinHit') {
+                let { effectID, paramName, statGroupName, amountMax, amplifyAmount } = damage.amplifyEffect;
+                let effect = game.combatEffects.getObjectSafe(effectID);
+                let target = damage.amplifyEffect.target === "Self" ? this : this.target;
+                let existingEffect = target.activeEffects.get(effect);
+                if(existingEffect !== undefined) {
+                    let stacks = 0;
+                    let existingStacks = 0;
+
+                    if(paramName !== undefined)
+                        existingStacks = existingEffect.getParameter(paramName);
+                    if(statGroupName !== undefined)
+                        existingStacks = existingEffect.getStatGroup(statGroupName);
+
+                    stacks += existingStacks;
+                    if(amountMax !== undefined)
+                        stacks = Math.min(stacks, amountMax);
+
+                    if(stacks > 0) {
+                        if(paramName !== undefined)
+                            existingEffect.setParameter(paramName, Math.max(0, existingStacks - stacks));
+                        if(statGroupName !== undefined)
+                            existingEffect.setStats(statGroupName, Math.max(0, existingStacks - stacks));
+                    }
+                }
+            }
+        });
+    });
 
     patch(Monster, 'applyDataModification').after(function(ret, modData, game) {
         if (modData.levels !== undefined) {
@@ -93,8 +232,6 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
     patch(CharacterModifierTable, 'getCritChance').replace(function(o, type) {
         if(type === 'necro') {
             let totalBonus = this.critChance;
-            //totalBonus += this.increasedNecroMaxHit;
-            //totalBonus -= this.decreasedNecroMaxHit;
             return totalBonus;
         } else {
             return o(type);
@@ -118,16 +255,34 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
     });
 
     Character.prototype.computeNecroMaxHit = function() {
-        let necroBonus = this.equipmentStats.necroStrengthBonus// + this.modifiers.increasedFlatNecroStrengthBonus;
-        //const modifier = this.modifiers.necroStrengthBonusModifier;
-        //necroBonus = applyModifier(necroBonus, modifier);
+        let level = this.levels.Necromancy;
+        if (this.damageType.id === "melvorItA:Abyssal" || this.damageType.id === "melvorItA:Eternal")
+            level += this.abyssalLevels.Necromancy;
+        return Character.calculateStandardMaxHit(level, this.equipmentStats.necroStrengthBonus);
+    }
 
-        return Character.calculateStandardMaxHit(this.levels.Necromancy, necroBonus);
+    Player.prototype.computeNecroMaxHit = function() {
+        let strengthBonus = this.equipmentStats.necroStrengthBonus + this.modifiers.getValue('necromancy:flatNecromancyStrengthBonus', ModifierQuery.EMPTY);
+        
+        //let twoHandModifier = 1;
+        //if (this.equipment.isWeapon2H)
+        //    twoHandModifier = 2;
+        //strengthBonus += this.modifiers.flatRangedStrengthBonusPerAttackInterval * Math.floor(this.stats.attackInterval / 100) * twoHandModifier;
+        let modifier = this.modifiers.getValue('necromancy:necroStrengthBonus', ModifierQuery.EMPTY);
+        
+        //if(this.equipment.isWeapon2H)
+        //    modifier += this.modifiers.rangedStrengthBonusWith2HWeapon;
+
+        strengthBonus = applyModifier(strengthBonus, modifier);
+        let necroLevel = this.levels.Necromancy;
+        if (this.damageType.id === "melvorItA:Abyssal" || this.damageType.id === "melvorItA:Eternal")
+            necroLevel += this.abyssalLevels.Necromancy;
+        return Character.calculateStandardMaxHit(necroLevel, strengthBonus);
     }
 
     patch(Character, 'rollToHit').replace(function(o, target, attack) {
-        if(this.attackType === 'necro' && attack.cantMiss && attack.minAccuracy > 0 && attack.minAccuracy <= 1) {
-            return this.stats.accuracy >= (attack.minAccuracy * 100);
+        if(this.attackType === 'necro') {
+            return this.stats.hitChance >= game.necromancy.minHitPercent;
         } else {
             return o(target, attack);
         }
@@ -135,8 +290,8 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
     
     patch(Character, 'computeMinHit').replace(function(o) {
         if(this.attackType === 'necro') {
-            let minHit = this.computeNecroMaxHit();
-            minHit = Math.floor(this.modifyMinHit(minHit) * 0.9);
+            let minHit = 1;
+            minHit = this.modifyMinHit(minHit);
             this.stats.minHit = minHit;
         } else {
             return o();
@@ -146,7 +301,7 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
     patch(Character, 'computeMaxHit').replace(function(o) {
         if(this.attackType === 'necro') {
             let maxHit = this.computeNecroMaxHit();
-            maxHit = Math.ceil(this.modifyMaxHit(maxHit) * 1.1);
+            maxHit = this.modifyMaxHit(maxHit);
             this.stats.maxHit = maxHit;
         } else {
             return o();
@@ -158,48 +313,110 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
     }
 
     patch(Character, 'modifyEvasion').after(function(ret, evasion) {
-        let evasionNecroModifier = 0;//this.modifiers.getValue('necromancy:necroEvasion');
-        if (this.modifiers.decreasedEvasionBasedOnDR > 0) {
-            const baseDR = this.equipmentStats.damageReduction;
-            evasionNecroModifier -= Math.floor((baseDR / 2) * this.modifiers.decreasedEvasionBasedOnDR);
-        }
+        let modifiers = this.modifiers.getValue('necromancy:necroEvasion', ModifierQuery.EMPTY);
+
+        modifiers += this.modifiers.evasion;
+        modifiers += this.modifiers.evasionBasedOnCorruptionLevel * this.abyssalLevels.Corruption;
+
+        this.modifiers.forEachDamageType("melvorD:evasionBasedOnResistance", (value, damageType) => {
+            const baseResistance = this.equipmentStats.getResistance(damageType);
+            modifiers += Math.floor((baseResistance / 2) * value);
+        });
+
         if (this.manager.fightInProgress) {
-            let globalBonus = 0;
-            if(this.target.attackType === 'necro') {
-                //globalBonus += this.modifiers.increasedEvasionAgainstNecro;
+            switch (this.target.attackType) {
+            case 'melee':
+                modifiers += this.modifiers.evasionAgainstMelee;
+                break;
+            case 'ranged':
+                modifiers += this.modifiers.evasionAgainstRanged;
+                break;
+            case 'magic':
+                modifiers += this.modifiers.evasionAgainstMagic;
+                break;
+            case 'magic':
+                modifiers += this.modifiers.getValue('necromancy:evasionAgainstNecro');
+                break;
             }
-            evasionNecroModifier += globalBonus;
+            modifiers += this.modifiers.getValue("melvorD:evasionAgainstDamageType", this.target.damageType.modQuery);
         }
-        evasion.necro = applyModifier(evasion.necro, evasionNecroModifier);
-        if (this.modifiers.globalEvasionHPScaling > 0) {
+
+        if(this === game.combat.player && this.equipment.isWeapon2H)
+            modifiers += this.modifiers.evasionWith2HWeapon;
+
+        evasion.necro = applyModifier(evasion.necro, modifiers);
+
+        if(this.modifiers.globalEvasionHPScaling > 0) {
             const modifier = (this.modifiers.globalEvasionHPScaling * this.hitpointsPercent) / 100;
             evasion.necro = Math.floor(evasion.necro * modifier);
         }
     });
 
     patch(Character, 'computeEvasion').after(function() {
+        let effectiveDefenceLevel = this.levels.Defence;
+        let effectiveNecromancyLevel = this.levels.Necromancy;
+        if (this.damageType.id === "melvorItA:Abyssal" || this.damageType.id === "melvorItA:Eternal") {
+            effectiveDefenceLevel += this.abyssalLevels.Defence;
+            effectiveNecromancyLevel += this.abyssalLevels.Necromancy;
+        }
+        
         const evasion = {
             necro: Character.calculateStandardStat({
-                effectiveLevel: this.levels.Necromancy,
+                effectiveLevel: Math.floor(effectiveDefenceLevel * 0.3 + effectiveNecromancyLevel * 0.7),
                 bonus: this.getNecroDefenceBonus(),
-            }),
+            })
         };
         this.modifyEvasion(evasion);
         this.stats.evasion.necro = evasion.necro;
     });
 
-    patch(Character, 'renderStats').after(function() {
-        //if(this.statElements.evasion.necro !== undefined)
-            //this.statElements.evasion.necro.forEach((elem)=>(elem.textContent = formatNumber(this.stats.evasion.necro)));
+
+    patch(Player, 'renderNormalDamage').before(function(minHit, maxHit) {
+        if(this.attackType === 'necro') {
+            let damageMod = game.combat.fightInProgress ? (Math.max(25, this.stats.hitChance) / 100) : 100;
+            let [min, max] = [minHit, maxHit];
+
+            if(!Number.isInteger(min))
+                min = parseInt(min.slice(1, -1));
+            if(!Number.isInteger(max))
+                max = parseInt(max.slice(1, -1));
+
+            min = Math.floor(min * damageMod);
+            max = Math.floor(max * damageMod);
+
+            if(!isNaN(min) && !isNaN(max)) {
+                if(game.combat.fightInProgress) {
+                    [minHit, maxHit] = [`(${min})`,`(${max})`];
+                } else {
+                    [minHit, maxHit] = [min, max];
+                }
+            }
+        }
+        return [minHit, maxHit];
     });
 
-    patch(Enemy, 'renderNoStats').after(function() {
-        //if(this.statElements.evasion.necro !== undefined)
-            //this.statElements.evasion.necro.forEach((elem)=>(elem.textContent = '-'));
-    });
+    patch(Enemy, 'renderNormalDamage').before(function(minHit, maxHit) {
+        if(this.attackType === 'necro') {
+            let damageMod = game.combat.fightInProgress ? (Math.max(25, this.stats.hitChance) / 100) : 100;
+            let [min, max] = [minHit, maxHit];
+            
+            if(!Number.isInteger(min))
+                min = parseInt(min.slice(1, -1));
+            if(!Number.isInteger(max))
+                max = parseInt(max.slice(1, -1));
 
-    patch(Enemy, 'computeLevels').after(function() {
-        this.levels.Necromancy = this.monster !== undefined && this.monster.levels.Necromancy !== undefined ? this.monster.levels.Necromancy : 1;
+            min = Math.floor(min * damageMod);
+            max = Math.floor(max * damageMod);
+
+            if(!isNaN(min) && !isNaN(max)) {
+                if(game.combat.fightInProgress) {
+                    [minHit, maxHit] = [`(${min})`,`(${max})`];
+                } else {
+                    [minHit, maxHit] = [min, max];
+                }
+            }
+        }
+        return [minHit, maxHit];
     });
 
     patch(Game, 'playerNormalCombatLevel').get(function(o) {
@@ -243,6 +460,10 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
         );
     });
 
+    patch(Enemy, 'computeLevels').after(function() {
+        this.levels.Necromancy = this.monster !== undefined && this.monster.levels.Necromancy !== undefined ? this.monster.levels.Necromancy : 1;
+    });
+
     patch(Player, 'computeLevels').after(function() {
         const getEffectiveLevel = (skill)=>{
             return skill.level + this.modifiers.getHiddenSkillLevels(skill);
@@ -250,13 +471,35 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
         this.levels.Necromancy = getEffectiveLevel(this.game.necromancy);
     });
 
-    patch(Player, 'getAccuracyValues').replace(function(o) {
+    patch(Enemy, 'getAccuracyValues').replace(function(o) {
         let effectiveLevel = 0;
         let accuracyBonus = 0;
         if(this.attackType === 'necro') {
             effectiveLevel = this.levels.Necromancy;
-            accuracyBonus = this.equipmentStats.necroAttackBonus// + this.modifiers.increasedFlatNecroAttackBonus;
-            //accuracyBonus += (this.modifiers.increasedFlatRangedAccuracyBonusPerAttackInterval - this.modifiers.decreasedFlatRangedAccuracyBonusPerAttackInterval) * Math.floor(this.stats.attackInterval / 100) * twoHandModifier;
+            accuracyBonus = this.equipmentStats.necroAttackBonus;
+            return {
+                effectiveLevel: effectiveLevel,
+                bonus: accuracyBonus,
+            };
+        } else {
+            return o();
+        }
+    });
+
+    patch(Player, 'getAccuracyValues').replace(function(o) {
+        let effectiveLevel = 0;
+        let accuracyBonus = 0;
+        let twoHandModifier = 1;
+        let modifier = 0;
+        if(this.equipment.isWeapon2H)
+            twoHandModifier = 2;
+        if(this.attackType === 'necro') {
+            effectiveLevel = this.levels.Necromancy;
+            if (this.damageType.id === "melvorItA:Abyssal" || this.damageType.id === "melvorItA:Eternal")
+                effectiveLevel += this.abyssalLevels.Necromancy;
+            accuracyBonus = this.equipmentStats.necroAttackBonus + this.modifiers.getValue("necromancy:flatNecromancyAttackBonus", ModifierQuery.EMPTY);
+            //accuracyBonus += this.modifiers.flatMeleeAccuracyBonusPerAttackInterval * Math.floor(this.stats.attackInterval / 100) * twoHandModifier;
+            accuracyBonus = applyModifier(accuracyBonus, modifier);
             return {
                 effectiveLevel: effectiveLevel,
                 bonus: accuracyBonus,
@@ -266,24 +509,128 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
         }
     });
 
-    patch(Game, 'onLoad').before(function() {
-        //if(!COMBAT_LEVEL_KEYS.includes('Necromancy'))
-        //    COMBAT_LEVEL_KEYS.push('Necromancy');
-        //enemyHTMLElements.levels.Necromancy = [document.getElementById('combat-enemy-necromancy-level')];
-        //enemyHTMLElements.levelContainers.Necromancy = [];
-        //enemyHTMLElements.evasion.necro = [document.getElementById('combat-enemy-necro-evasion')];
-        
-        //playerHTMLElements.evasion.necro = [document.getElementById('combat-player-defence-bonus-necro')];
+    patch(Character, 'getAccuracyModifier').replace(function(o) {
+        if(this.attackType === 'necro') {
+            let modifier = this.modifiers.accuracyRating;
+            modifier += this.modifiers.getValue("necromancy:necromancyAccuracyRating", ModifierQuery.EMPTY);
+            if(this.manager.fightInProgress)
+                modifier += this.modifiers.getValue("melvorD:accuracyRatingAgainstDamageType", this.target.damageType.modQuery);
+            return modifier;
+        }
+        return o();
     });
 
+    let _OffensiveStatsElement_getAttackTypeMedia = OffensiveStatsElement.getAttackTypeMedia;
+    OffensiveStatsElement.getAttackTypeMedia = function(attackType) {
+        if(attackType === 'necro')
+          return game.necromancy.media;
+        return _OffensiveStatsElement_getAttackTypeMedia(attackType);
+    }
 
-    console.log("Registering Necromancy Data");
-    await gameData.addPackage('data/data.json'); // Add skill data (page + sidebar, skillData)
-    
-    if(cloudManager.hasAoDEntitlementAndIsEnabled)
-        await gameData.addPackage('data/data-aod.json');
+    patch(MonsterSelectTableElement, 'createRow').after(function(_, monster, area) {
+        let lastElement = this.tableBody.lastElementChild;
+        if(monster.attackType === 'necro')
+            lastElement.querySelector('td img.skill-icon-xxs.mr-1').src = game.necromancy.media;
+    });
 
-    console.log('Registered Necromancy Data.');
+    patch(Character, 'attack').replace(function(o, target, attack) {
+        if(this === game.combat.player && this.attackType === 'necro' && (attack === game.necromancy.selectedAttackSpell || attack === game.normalAttack)) {
+            if(game.necromancy.castAttackSpell(game.necromancy.selectedAttackSpell)) {
+                return o(target, attack);
+            } else {
+                this.isAttacking = false;
+                return 0;
+            }
+        } else {
+            return o(target, attack);
+        }
+    });
+
+    patch(Character, 'queueNextAction').after(function(_, noSpec=false, tickOffset=false) {
+        if(this === game.combat.player && this.attackType === 'necro') {
+            if(game.necromancy.selectedAttackSpell !== undefined) {
+                if(game.necromancy.selectedAttackSpell.specialAttacks !== undefined) {
+                    this.nextAttack = game.necromancy.selectedAttackSpell.specialAttacks[0];
+                }
+            }
+            if(game.necromancy.selectedAugurySpell !== undefined) {
+                let spell = game.necromancy.selectedAugurySpell;
+                let start = spell.turns - 1;
+                let total = start + spell.specialAttacks.length;
+
+                let range = Array.from({length: spell.specialAttacks.length}, (v,i) => start+i)
+                
+                let turnsTaken = this.turnsTaken - game.necromancy.auguryTurnOffset;
+                if(range.includes(turnsTaken % total)) {
+                    let attackOffset = (turnsTaken % total) - start;
+                    let nextAttack = spell.specialAttacks[attackOffset];
+                    if((!nextAttack.usesRunesPerProc && this.attackCount > 1) || game.necromancy.castAugurySpell(spell)) {
+                        this.nextAttack = nextAttack;
+                        
+                        if(spell.consumesEffect !== undefined) {
+                            let maxAttacks = this.nextAttack.attackCount;
+                            let target = spell.consumesEffect.target === "Self" ? this : this.target;
+                            const existingEffect = target.activeEffects.get(spell.consumesEffect.effect);
+                            if(existingEffect !== undefined && spell.consumesEffect.type === "IncreaseAttacks") {
+                                if(spell.consumesEffect.paramName !== undefined)
+                                    maxAttacks += existingEffect.getParameter(spell.consumesEffect.paramName);
+                                if(spell.consumesEffect.statGroupName !== undefined)
+                                    maxAttacks += existingEffect.getStatGroup(spell.consumesEffect.statGroupName);
+                            }
+                            this.isAttacking = this.attackCount > 0 && maxAttacks > 1 && this.attackCount < maxAttacks;
+                        } else {
+                            this.isAttacking = this.attackCount > 0 && this.nextAttack.attackCount > 1 && this.attackCount < this.nextAttack.attackCount;
+                        }
+
+                        if(!this.game.currentGamemode.enableInstantActions)
+                            this.timers.act.start(this.isAttacking ? this.nextAttack.attackInterval : this.stats.attackInterval, tickOffset);
+                    }
+                }
+            }
+        }
+    });
+
+    patch(Character, 'getAttackLifestealModifier').after(function(modifier) {
+        if(this.attackType === 'necro')
+            modifier += this.modifiers.getValue('necromancy:necromancyLifesteal', ModifierQuery.EMPTY);
+        return modifier;
+    });
+
+    patch(RuneMenuElement, 'updateHighlights').replace(function(o, spellSelection, attackSelection, useAltRunes) {
+        if(game.combat.player.attackType === 'necro') {
+            this.highlighted.forEach((item)=>{
+                this.removeBorder(item);
+            });
+
+            if (spellSelection.curse !== undefined)
+                this.addBordersForSpell(spellSelection.curse, useAltRunes);
+            if (spellSelection.aurora !== undefined)
+                this.addBordersForSpell(spellSelection.aurora, useAltRunes);
+            
+            if(game.necromancy.selectedAttackSpell !== undefined) {
+                game.necromancy.selectedAttackSpell.itemsConsumed.forEach(({item}) => {
+                    this.addBorder(item);
+                });
+            }
+            if(game.necromancy.selectedAugurySpell !== undefined) {
+                game.necromancy.selectedAugurySpell.itemsConsumed.forEach(({item}) => {
+                    this.addBorder(item);
+                });
+            }
+            if(game.necromancy.selectedConjurationSpell !== undefined) {
+                game.necromancy.selectedConjurationSpell.itemsConsumed.forEach(({item}) => {
+                    this.addBorder(item);
+                });
+            }
+            if(game.necromancy.selectedIncantationSpell !== undefined) {
+                game.necromancy.selectedIncantationSpell.itemsConsumed.forEach(({item}) => {
+                    this.addBorder(item);
+                });
+            }
+        } else {
+            o(spellSelection, attackSelection, useAltRunes);
+        }
+    });
 
     function ensureEvasion(evasion) {
         if(evasion && evasion.necroIcon === undefined && evasion.necroEvasion === undefined) {
@@ -382,62 +729,126 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
             this.necroLevel.textContent = '-';
     });
 
-    onModsLoaded(async () => {
-        if(cloudManager.hasAoDEntitlementAndIsEnabled) {
-            const levelCapIncreases = ['necromancy:Pre99Dungeons', 'necromancy:ImpendingDarknessSet100'];
-
-            if(cloudManager.hasTotHEntitlementAndIsEnabled) {
-                levelCapIncreases.push(...['necromancy:Post99Dungeons', 'necromancy:ThroneOfTheHeraldSet120']);
-            }
-
-            const gamemodes = game.gamemodes.filter(gamemode => gamemode.defaultInitialLevelCap !== undefined && gamemode.levelCapIncreases.length > 0 && gamemode.useDefaultSkillUnlockRequirements === true && gamemode.allowSkillUnlock === false);
-
-            await gameData.addPackage({
-                $schema: '',
-                namespace: 'necromancy',
-                modifications: {
-                    gamemodes: gamemodes.map(gamemode => ({
-                        id: gamemode.id,
-                        levelCapIncreases: {
-                            add: levelCapIncreases
-                        },
-                        startingSkills: {
-                            add: ['necromancy:Necromancy']
-                        },
-                        skillUnlockRequirements: [
-                            {
-                                skillID: 'necromancy:Necromancy',
-                                requirements: [
-                                    {
-                                        type: 'SkillLevel',
-                                        skillID: 'melvorD:Attack',
-                                        level: 1
-                                    }
-                                ]
-                            }
-                        ]
-                    }))
-                }
-            });
+    patch(Player, 'interruptAttack').after(function() {
+        if (this.manager.canInteruptAttacks) {
+            game.necromancy.conjuredEntity.startConjureAttack();
         }
-    
-        patch(EventManager, 'loadEvents').after(() => {
-            if(game.currentGamemode.startingSkills !== undefined && game.currentGamemode.startingSkills.has(game.necromancy)) {
-                game.necromancy.setUnlock(true);
-            }
-        });
+    });
 
-        game.monsters.forEach(monster => {
-            if(monster.attackType === "melee") {
-                monster.levels.Necromancy = monster.levels.Attack;
-            }
-            if(monster.attackType === "ranged") {
-                monster.levels.Necromancy = monster.levels.Ranged;
-            }
-            if(monster.attackType === "magic") {
-                monster.levels.Necromancy = monster.levels.Magic;
-            }
-        });
+    patch(BaseManager, 'startFight').replace(function(o, tickOffset=true) {
+        game.necromancy.fightStartCheck();
+        o();
+        game.necromancy.conjuredEntity.startConjureAttack();
+    });
+
+    patch(BaseManager, 'onCombatPageChange').before(function() {
+        game.necromancy.renderQueue.conjureBar = true;
+    });
+
+    patch(BaseManager, 'renderSpellBook').replace(function(o) {
+        if(this.renderQueue.spellBook) {
+            combatMenus.necromancy.updateRequirements(this.ignoreSpellRequirements);
+            game.combat.player.renderQueue.runesUsed = true;
+        }
+        o();
+    });
+
+    patch(Player, 'changeEquipmentSet').replace(function(o, setID) {
+        let oldSetID = this.selectedEquipmentSet;
+        o(setID);
+        if(oldSetID !== setID)
+            game.necromancy.changeEquipmentSet(oldSetID, setID);
+    });
+
+    patch(Player, 'setRenderAll').after(function() {
+        game.necromancy.renderQueue.conjureBar = true;
+    });
+
+    patch(Player, 'initializeForCombat').before(function() {
+        game.necromancy.renderQueue.conjureBar = true;
+    });
+
+    patch(Player, 'activeTick').after(function() {
+        game.necromancy.conjuredEntity.conjureTimer.tick();
+    });
+
+    patch(Player, 'stopFighting').before(function() {
+        game.necromancy.conjuredEntity.conjureTimer.stop();
+    });
+
+    patch(Player, 'resetActionState').after(function() {
+        game.necromancy.conjuredEntity.conjureTimer.stop();
+    });
+
+    patch(Player, 'renderDamageValues').after(function() {
+        game.necromancy.renderConjureMinHit();
+        game.necromancy.renderConjureMaxHit();
+    });
+
+    SplashManager.splashClasses['ConjureAttack'] = 'text-purple';
+
+    PlayerStatsElement.prototype.setConjureMinHit = function(canAttack, minHit, isFighting) {
+        if(canAttack) {
+            this.conjureMinHit.textContent = isFighting ? `(${numberWithCommas(minHit)})` : numberWithCommas(minHit);
+            showElement(this.conjureMinHitContainer);
+        } else {
+            hideElement(this.conjureMinHitContainer);
+        }
+    }
+    PlayerStatsElement.prototype.setConjureMaxHit = function(canAttack, maxHit, isFighting) {
+        if(canAttack) {
+            this.conjureMaxHit.textContent = isFighting ? `(${numberWithCommas(maxHit)})` : numberWithCommas(maxHit);
+            showElement(this.conjureMaxHitContainer);
+        } else {
+            hideElement(this.conjureMaxHitContainer);
+        }
+    }
+
+    class PlayerConjureAttackHitEventMatcher extends CharacterGameEventMatcher {
+        constructor(options, game) {
+            super(game);
+            this.type = 'PlayerConjureAttackHit';
+        }
+        doesEventMatch(event) {
+            return true;
+        }
+        _assignCharacterHandler(handler, combat) {
+            combat.player.on('conjureAttackHit', handler);
+        }
+        _unassignCharacterHandler(handler, combat) {
+            combat.player.off('conjureAttackHit', handler);
+        }
+    }
+
+    patch(GameEventSystem, 'constructMatcher').after(function(_, data) {
+        if(data.type === 'PlayerConjureAttackHit')
+            return new PlayerConjureAttackHitEventMatcher(data,this.game);
+    });
+
+    patch(EquipmentSetMenu, 'getTooltipContent').after(function(mainHTML, set) {
+        let setID = game.combat.player.equipmentSets.indexOf(set);
+        let customHTML = `<span class="text-info">Necromancy</span><br>`;
+        let savedAttack = game.necromancy.savedAttackSpells.get(setID);
+        let savedAugury = game.necromancy.savedAugurySpells.get(setID);
+        let savedConjuration = game.necromancy.savedConjurationSpells.get(setID);
+        let savedIncantation = game.necromancy.savedIncantationSpells.get(setID);
+
+        if (savedAttack === undefined)
+            savedAttack = game.necromancy.spells.firstObject;
+        customHTML += this.getTooltipRow(savedAttack.media, savedAttack.name);
+
+        if (savedAugury !== undefined)
+            customHTML += this.getTooltipRow(savedAugury.media, savedAugury.name);
+        if (savedConjuration !== undefined)
+            customHTML += this.getTooltipRow(savedConjuration.media, savedConjuration.name);
+        if (savedIncantation !== undefined)
+            customHTML += this.getTooltipRow(savedIncantation.media, savedIncantation.name);
+        
+
+        if(customHTML !== '') {
+            mainHTML = mainHTML.replace(/(<div class="text-center">.*)(<\/div>)/s, `$1${customHTML}$2`);
+        }
+        return mainHTML;
     });
 
     patch(ItemUpgradeMenuElement, 'setEquipmentStats').before(function() {
@@ -562,8 +973,100 @@ export async function setup({ name, characterStorage, gameData, patch, loadTempl
         }
     })
 
-    onInterfaceAvailable(() => { 
-        game.necromancy.component.mount(document.getElementById('main-container')); // Add skill container
+
+    Character.numberExprTranspiler.config.references.children.get('self').children.get('modifier').addProperties([
+        'necromancyNecrosisStacks',
+        'necromancyResidualSoulStacks',
+        'necromancySanityStacks',
+        'necromancyResidualSoulStackIncrease',
+        'necromancyExtraResidualSoulStack'
+    ], ExprPrimaryType.Number)
+
+    patch(CharacterModifierTable, 'init').after(function(_, game) {
+        if(game.modifierRegistry.namespaceMaps.get(namespace) !== undefined) {
+            game.modifierRegistry.namespaceMaps.get(namespace).forEach((modifier) => {
+                if(!modifier.hasEmptyScope || !modifier.allowEnemy)
+                    return;
+                const id = modifier.id;
+                Object.defineProperty(this, modifier.localID, {
+                    get: () => {
+                        return this.getValue(id, ModifierQuery.EMPTY);
+                    }
+                });
+            });
+        }
+    });
+
+    console.log("Registering Necromancy Data");
+    await gameData.addPackage('data/data.json'); // Add skill data (page + sidebar, skillData)
+    
+    if(cloudManager.hasAoDEntitlementAndIsEnabled)
+        await gameData.addPackage('data/data-aod.json');
+
+    console.log('Registered Necromancy Data.');
+
+    onModsLoaded(async () => {
+        await game.necromancy.onModsLoaded();
+
+        if(cloudManager.hasAoDEntitlementAndIsEnabled) {
+            const levelCapIncreases = ['necromancy:Pre99Dungeons', 'necromancy:ImpendingDarknessSet100'];
+
+            if(cloudManager.hasTotHEntitlementAndIsEnabled) {
+                levelCapIncreases.push(...['necromancy:Post99Dungeons', 'necromancy:ThroneOfTheHeraldSet120']);
+            }
+
+            const gamemodes = game.gamemodes.filter(gamemode => gamemode.defaultInitialLevelCap !== undefined && gamemode.levelCapIncreases.length > 0 && gamemode.useDefaultSkillUnlockRequirements === true && gamemode.allowSkillUnlock === false);
+
+            await gameData.addPackage({
+                $schema: '',
+                namespace: 'necromancy',
+                modifications: {
+                    gamemodes: gamemodes.map(gamemode => ({
+                        id: gamemode.id,
+                        levelCapIncreases: {
+                            add: levelCapIncreases
+                        },
+                        startingSkills: {
+                            add: ['necromancy:Necromancy']
+                        },
+                        skillUnlockRequirements: [
+                            {
+                                skillID: 'necromancy:Necromancy',
+                                requirements: [
+                                    {
+                                        type: 'SkillLevel',
+                                        skillID: 'melvorD:Attack',
+                                        level: 1
+                                    }
+                                ]
+                            }
+                        ]
+                    }))
+                }
+            });
+        }
+    
+        patch(EventManager, 'loadEvents').after(() => {
+            if(game.currentGamemode.startingSkills !== undefined && game.currentGamemode.startingSkills.has(game.necromancy)) {
+                game.necromancy.setUnlock(true);
+            }
+        });
+
+        game.monsters.forEach(monster => {
+            if(monster.attackType === "melee") {
+                monster.levels.Necromancy = monster.levels.Attack;
+            }
+            if(monster.attackType === "ranged") {
+                monster.levels.Necromancy = monster.levels.Ranged;
+            }
+            if(monster.attackType === "magic") {
+                monster.levels.Necromancy = monster.levels.Magic;
+            }
+        });
+    });
+
+    onInterfaceAvailable(async () => { 
+        await game.necromancy.onInterfaceAvailable();
 
         let itemViewCurrentOffence = document.getElementById('item-view-current-magicDamageBonus').parentNode;
         itemViewCurrentOffence.after(

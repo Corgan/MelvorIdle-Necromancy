@@ -1,13 +1,244 @@
-<template id="necromancy-page-component">
-  <div class="content d-none" id="necromancy-container">
-    <div class="skill-info">
-      <skill-header data-skill-id="necromancy:Necromancy"></skill-header>
-    </div>
-    <div class="row row-deck gutters-tiny">
-      <div class="col-12">
-        <div id="page" class="block block-rounded border-top border-success border-4x p-3">
+<template id="necromancy-page-template">
+  <div class="skill-info">
+    <skill-header data-skill-id="necromancy:Necromancy"></skill-header>
+  </div>
+  <div class="row row-deck">
+    <realmed-category-menu class="col-12" id="necromancy-category-menu"></realmed-category-menu>
+    <div class="col-12">
+      <div class="block block-rounded block-link-pop border-top border-smithing border-4x">
+        <div class="row no-gutters" id="necromancy-category-container">
+          <div class="col-12 col-md-4">
+            <necromancy-artisan-menu id="necromancy-artisan-menu"></necromancy-artisan-menu>
+          </div>
         </div>
       </div>
     </div>
+  </div>
+</template>
+
+<template id="necromancy-artisan-menu-template">
+  <div class="col-12 px-0">
+    <div class="block-content block-content-full">
+      <div class="row gutters-tiny">
+        <div class="col-12">
+          <div class="row row-deck gutters-tiny">
+            <div class="col-4">
+              <div class="block block-rounded-double bg-combat-inner-dark text-center p-3">
+                <img class="bank-img-detail" id="product-image">
+                <div style="position:absolute;left:0;bottom:10px;width:100%;">
+                  <small class="font-w600 badge-pill bg-secondary m-1 text-white" id="product-quantity">-</small>
+                </div>
+              </div>
+            </div>
+            <div class="col-8">
+              <div class="block block-rounded-double bg-combat-inner-dark pt-2 pl-2 pr-2 pb-1">
+                <h5 class="font-size-sm font-w600 text-muted m-1">
+                  <small>
+                    <lang-string lang-id="MENU_TEXT_CREATE"></lang-string>
+                  </small>
+                </h5>
+                <h5 class="font-w700 text-left text-combat-smoke m-1">
+                  <span id="product-name">-</span>
+                </h5>
+                <h5 class="font-w400 font-size-sm text-left text-bank-desc m-1 mb-2">
+                  <small id="product-description"></small>
+                  </h5>
+                <h5 class="font-w400 font-size-sm text-left text-bank-desc m-1 mb-2">
+                  <small id="selected-text">
+                    <lang-string lang-id="MENU_TEXT_NONE_SELECTED"></lang-string>
+                  </small>
+                </h5>
+                <h5 class="font-w400 font-size-sm text-left combat-action m-1 mb-2 pointer-enabled d-none" id="view-stats-text">
+                  <lang-string lang-id="MENU_TEXT_VIEW_STATS"></lang-string>
+                </h5>
+                <div class="col-12">
+                  <div class="row icon-size-48">
+                    <preservation-icon id="product-preservation"></preservation-icon>
+                    <doubling-icon id="product-doubling"></doubling-icon>
+                    <additional-primary-quantity-icon class="d-none" id="product-additional-primary-quantity"></additional-primary-quantity-icon>
+                    <cost-reduction-icon class="d-none" id="product-cost-reduction"></cost-reduction-icon>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 block block-rounded-double bg-combat-inner-dark">
+            <div class="row no-gutters">
+              <div class="col-md-2"></div>
+              <div class="col-12 col-md-8">
+                <mastery-display class="mastery-6" id="mastery"></mastery-display>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 block block-rounded-double bg-combat-inner-dark pt-2 pb-1 text-center">
+            <div class="row no-gutters">
+              <div class="col-12 d-none" id="drop-down-container">
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <lang-string lang-id="MENU_TEXT_SELECT_RECIPE"></lang-string>
+                  </button>
+                  <div class="dropdown-menu font-size-sm overflow-y-auto" style="max-height: 60vh;z-index:1000;" id="recipe-options-container"></div>
+                </div>
+              </div>
+              <requires-box class="col-12 col-sm-6 pb-2 icon-size-48" id="requires"></requires-box>
+              <haves-box class="col-12 col-sm-6 pb-2 icon-size-48" id="haves"></haves-box>
+            </div>
+          </div>
+          <div class="col-12 block block-rounded-double bg-combat-inner-dark pt-2 pb-1 text-center">
+            <div class="row no-gutters">
+              <produces-box class="col-12 col-sm-6 pb-2 icon-size-48" id="produces"></produces-box>
+              <grants-box class="col-12 col-sm-6 pb-2 icon-size-48" id="grants"></grants-box>
+            </div>
+          </div>
+          <div class="col-12 block block-rounded-double bg-combat-inner-dark p-3 text-center">
+            <div class="row justify-content-center icon-size-48">
+              <div>
+                <button class="btn btn-success m-2 p-2" type="button" style="min-height: 48px;" id="create-button">
+                  <lang-string lang-id="MENU_TEXT_CREATE"></lang-string>
+                </button>
+              </div>
+              <interval-icon id="interval"></interval-icon>
+              <div class="col-12">
+                <progress-bar class="progress-height-5" id="progress-bar"></progress-bar>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="necromancy-necronomicon-menu-template">
+  <div class="block block-rounded-double bg-combat-inner-dark text-center p-2 mb-2">
+    <div class="row no-gutters">
+      <div class="col-6">
+        <h5 class="font-w700 text-combat-smoke text-left m-1 mb-2">
+          <span>Necronomicon</span>
+        </h5>
+      </div>
+      <div class="col-6">
+        <h5 class="font-w400 text-right m-1 mb-2">
+          <small id="weapon-notice" class="text-danger">
+            <span>Necromancy Weapon Required</span>
+          </small>
+        </h5>
+      </div>
+    </div>
+    <div class="p-1">
+      <div class="row no-gutters">
+        <div class="col-12 push">
+          <div class="btn-group w-100" role="group" id="necromancy-button-group">
+            <button class="btn btn-sm btn-outline-secondary" id="necromancy-attack-button"><img class="skill-icon-xs" data-necro-src="assets/necromancy.png"></button>
+            <button class="btn btn-sm btn-outline-secondary" id="necromancy-augury-button"><img class="skill-icon-xs" data-necro-src="assets/augury.png"></button>
+            <button class="btn btn-sm btn-outline-secondary" id="necromancy-conjuration-button"><img class="skill-icon-xs" data-necro-src="assets/conjuration.png"></button>
+            <button class="btn btn-sm btn-outline-secondary" id="necromancy-incantation-button"><img class="skill-icon-xs" data-necro-src="assets/incantation.png"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="p-1">
+      <necromancy-attack-spell-menu id="necromancy-attack-spell-menu"></necromancy-attack-spell-menu>
+      <necromancy-augury-spell-menu id="necromancy-augury-spell-menu" class="d-none"></necromancy-augury-spell-menu>
+      <necromancy-conjuration-spell-menu id="necromancy-conjuration-spell-menu" class="d-none"></necromancy-conjuration-spell-menu>
+      <necromancy-incantation-spell-menu id="necromancy-incantation-spell-menu"  class="d-none"></necromancy-incantation-spell-menu>
+      <small class="text-warning">All Necromancy spells are guaranteed to hit above 25% hit chance. Damage is scaled up to 100% hit chance.</small>
+    </div>
+  </div>
+</template>
+
+<template id="necromancy-attack-spell-menu-template">
+  <div class="row" id="spell-container">
+    <div class="col-12">
+      <small class="text-warning">
+        <span id="book-name"></span>
+      </small>
+    </div>
+  </div>
+</template>
+
+<template id="necromancy-attack-spell-tooltip-template">
+  <div class="justify-vertical-center font-size-sm text-center">
+    <span class='text-warning font-size-base' id="spell-name"></span>
+    <span class='text-info' id="spell-description"></span>
+    <span class=''>Consumed on Attack:</span>
+    <span class="justify-horizontal-center" id="items-consumed"></span>
+  </div>
+</template>
+
+<template id="necromancy-augury-spell-menu-template">
+  <div class="row" id="spell-container">
+    <div class="col-12">
+      <small class="text-warning">
+        <span id="book-name"></span>
+      </small>
+    </div>
+  </div>
+</template>
+
+<template id="necromancy-augury-spell-tooltip-template">
+  <div class="justify-vertical-center font-size-sm text-center">
+    <span class='text-warning font-size-base' id="spell-name"></span>
+    <span>This is cast every <span class='text-info' id="spell-turns"></span> turns.</span>
+    <span class='text-info' id="spell-description"></span>
+    <span class=''>Consumed on Cast:</span>
+    <span class="justify-horizontal-center" id="items-consumed"></span>
+  </div>
+</template>
+
+<template id="necromancy-conjuration-spell-menu-template">
+  <div class="row" id="spell-container">
+    <div class="col-12">
+      <small class="text-warning">
+        <span id="book-name"></span>
+      </small>
+    </div>
+  </div>
+</template>
+
+<template id="necromancy-conjuration-spell-tooltip-template">
+  <div class="justify-vertical-center font-size-sm text-center">
+    <span class='text-warning font-size-base' id="spell-name"></span>
+    <span class='text-info' id="spell-description"></span>
+    <span class=''>Consumed on Fight Start:</span>
+    <span class="justify-horizontal-center" id="items-consumed"></span>
+  </div>
+</template>
+
+<template id="necromancy-incantation-spell-menu-template">
+  <div class="row" id="spell-container">
+    <div class="col-12">
+      <small class="text-warning">
+        <span id="book-name"></span>
+      </small>
+    </div>
+  </div>
+</template>
+
+<template id="necromancy-incantation-spell-tooltip-template">
+  <div class="justify-vertical-center font-size-sm text-center">
+    <span class='text-warning font-size-base' id="spell-name"></span>
+    <span class='text-info' id="spell-description"></span>
+    <span class=''>Consumed on Fight Start:</span>
+    <span class="justify-horizontal-center" id="items-consumed"></span>
+  </div>
+</template>
+
+<template id="necromancy-spell-button-template">
+  <ul class="nav nav-pills nav-justified push">
+    <li class="nav-item mr-1">
+      <small class="text-warning">
+        <a class="pointer-enabled nav-link border border-dark p-0" id="link">
+          <img class="skill-icon-xs" id="spell-image">
+        </a>
+      </small>
+    </li>
+  </ul>
+</template>
+
+<template id="necromancy-locked-spell-tooltip-template">
+  <div class="justify-vertical-center font-size-sm text-center">
+    <lang-string class="text-info" lang-id="MENU_TEXT_REQUIRES"></lang-string>
+    <span class="text-success" id="level-required"></span>
   </div>
 </template>
